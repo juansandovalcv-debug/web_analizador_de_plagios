@@ -15,6 +15,6 @@
 
 
         public int IdEvaluacion { get; set; }
-        public Evaluacion? evaluacion { get; set; }
+        public Evaluacion? Evaluacion { get; set; }
     }
 }
