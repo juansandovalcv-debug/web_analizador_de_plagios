@@ -8,10 +8,10 @@
         public string RutaArchivo { get; set; } = string.Empty;
         public string MetadatosJson { get; set; } = "{}";
 
-        public int IdEstudiante { get; set; }
-        public Estudiante? estudiante { get; set; }
-
         // estas son las llaves foraneas que conectan la clase evaluacion para que se saque el porcentaje de plagio
+
+        public int IdEstudiante { get; set; }
+        public Estudiante? Estudiante { get; set; }
 
 
         public int IdEvaluacion { get; set; }
