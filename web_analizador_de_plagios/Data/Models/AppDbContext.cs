@@ -14,10 +14,16 @@ namespace web_analizador_de_plagios.Data.Models
         {
            base.OnModelCreating(modelBuilder);
 
+            //claves primarias
+            modelBuilder.Entity<Grupo>().HasKey(g => g.IdGrupo);
+            modelBuilder.Entity<Estudiante>().HasKey(e => e.IdEstudiante);
+            modelBuilder.Entity<Evaluacion>().HasKey(e => e.IdEvaluacion);
+            modelBuilder.Entity<HistorialAnalisis>().HasKey(h => h.IdHistorial);
+
+            // Índice único para evitar duplicar carnet por grupo
             modelBuilder.Entity<Estudiante>()
                 .HasIndex(e => new { e.Carnet, e.IdGrupo })
                 .IsUnique();
-
         }
     }
 }

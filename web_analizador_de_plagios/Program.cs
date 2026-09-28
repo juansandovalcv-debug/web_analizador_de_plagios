@@ -1,11 +1,14 @@
+using Microsoft.AspNetCore.Hosting.Builder;
+using Microsoft.EntityFrameworkCore;
 using web_analizador_de_plagios.Components;
-
+using web_analizador_de_plagios.Data.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite("Data Source=sistema_plagio.db"));
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

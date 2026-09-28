@@ -1,7 +1,10 @@
-﻿namespace web_analizador_de_plagios.Data.Models
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace web_analizador_de_plagios.Data.Models
 {
     public class Estudiante
     {
+        [Key]
         public int IdEstudiante { get; set; }
         public string Carnet {  get; set; } = string.Empty;
         public string NombreCompleto { get; set; } = string.Empty;
