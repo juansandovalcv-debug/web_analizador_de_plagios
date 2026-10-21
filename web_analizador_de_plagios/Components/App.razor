@@ -1,23 +1,58 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+@code {
+    // Shared JavaScript helper functions for clipboard, download and theme
+}
+<!DOCTYPE html>
+<html lang="es" data-bs-theme="dark">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PlagScan Pro - Analizador de Plagio e Inteligencia Artificial</title>
     <base href="/" />
-    <ResourcePreloader />
-    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
-    <link rel="stylesheet" href="@Assets["app.css"]" />
-    <link rel="stylesheet" href="@Assets["web_analizador_de_plagios.styles.css"]" />
-    <ImportMap />
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="web_analizador_de_plagios.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet />
 </head>
 
 <body>
     <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
-    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="_framework/blazor.web.js"></script>
+    <script>
+        window.descargarArchivo = function (nombreArchivo, contenidoTexto) {
+            const blob = new Blob([contenidoTexto], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nombreArchivo;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        window.descargarBytesZip = function (nombreArchivo, base64Bytes) {
+            const link = document.createElement('a');
+            link.download = nombreArchivo;
+            link.href = "data:application/zip;base64," + base64Bytes;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        window.cambiarTema = function (tema) {
+            document.documentElement.setAttribute('data-bs-theme', tema);
+            localStorage.setItem('tema_plagio', tema);
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const temaGuardado = localStorage.getItem('tema_plagio') || 'dark';
+            document.documentElement.setAttribute('data-bs-theme', temaGuardado);
+        });
+    </script>
 </body>
 
 </html>

@@ -1,0 +1,632 @@
+@page "/grupos"
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject GestorRespaldos GestorRespaldos
+@inject IJSRuntime JS
+
+<PageTitle>Gestión de Grupos y Estudiantes</PageTitle>
+
+<div class="container-fluid p-0">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h2 class="fw-bold m-0"><i class="bi bi-people-fill text-primary me-2"></i>Gestión de Grupos y Estudiantes</h2>
+            <p class="text-secondary small m-0">Administración de grupos lectivos, cómputos (1, 2, 3), importación masiva y respaldos .zip</p>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary btn-sm" @onclick="() => mostrarModalGrupo = true">
+                <i class="bi bi-folder-plus me-1"></i> Nuevo Grupo
+            </button>
+            <button class="btn btn-primary btn-sm" @onclick="() => mostrarModalEstudiante = true">
+                <i class="bi bi-person-plus me-1"></i> Agregar Estudiante
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(mensajeAlerta))
+    {
+        <div class="alert @(tipoAlerta == "success" ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+            <i class="bi @(tipoAlerta == "success" ? "bi-check-circle" : "bi-exclamation-triangle") me-2"></i>
+            @mensajeAlerta
+            <button type="button" class="btn-close" @onclick="() => mensajeAlerta = null"></button>
+        </div>
+    }
+
+    <!-- Filtros de búsqueda -->
+    <div class="card card-modern mb-4 p-3">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold text-secondary">Filtrar por Grupo</label>
+                <select class="form-select form-select-sm" @bind="filtroGrupoId" @bind:after="CargarEstudiantesAsync">
+                    <option value="0">-- Todos los Grupos --</option>
+                    @foreach (var g in listaGrupos)
+                    {
+                        <option value="@g.IdGrupo">@g.NombreGrupo (Año @g.AnioLectivo - Ciclo @g.ciclo)</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold text-secondary">Ciclo</label>
+                <select class="form-select form-select-sm" @bind="filtroCiclo" @bind:after="AplicarFiltros">
+                    <option value="0">Todos</option>
+                    <option value="1">Ciclo 1</option>
+                    <option value="2">Ciclo 2</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold text-secondary">Año Lectivo</label>
+                <input type="number" class="form-control form-control-sm" placeholder="Ej: 2026" @bind="filtroAnio" @bind:after="AplicarFiltros" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold text-secondary">Buscar Carnet o Nombre</label>
+                <input type="text" class="form-control form-control-sm" placeholder="Buscar..." @bind="busquedaTexto" @bind:event="oninput" @bind:after="AplicarFiltros" />
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-outline-secondary btn-sm w-100" @onclick="ResetFiltros">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pestañas de Acciones: Listado / Importación Masiva / Respaldos ZIP -->
+    <ul class="nav nav-pills mb-3" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link @(pestanaActiva == "estudiantes" ? "active" : "")" @onclick="@(() => pestanaActiva = "estudiantes")">
+                <i class="bi bi-table me-1"></i> Estudiantes (@estudiantesFiltrados.Count)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(pestanaActiva == "masiva" ? "active" : "")" @onclick="@(() => pestanaActiva = "masiva")">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Importación Masiva (CSV / Texto)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(pestanaActiva == "respaldos" ? "active" : "")" @onclick="@(() => pestanaActiva = "respaldos")">
+                <i class="bi bi-file-zip me-1"></i> Copias de Seguridad (.ZIP)
+            </button>
+        </li>
+    </ul>
+
+    <!-- Vista 1: Estudiantes -->
+    @if (pestanaActiva == "estudiantes")
+    {
+        <div class="card card-modern p-3">
+            @if (cargando)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="text-secondary mt-2">Cargando registros...</p>
+                </div>
+            }
+            else if (!estudiantesFiltrados.Any())
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox text-secondary fs-1"></i>
+                    <p class="text-secondary mt-2">No se encontraron estudiantes para los filtros seleccionados.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr class="text-secondary">
+                                <th>#</th>
+                                <th>Carnet</th>
+                                <th>Nombre Completo</th>
+                                <th>Grupo Asignado</th>
+                                <th>Ciclo / Año</th>
+                                <th>Historiales</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var (est, idx) in estudiantesFiltrados.Select((e, i) => (e, i + 1)))
+                            {
+                                <tr>
+                                    <td class="text-secondary small">@idx</td>
+                                    <td><span class="badge bg-secondary font-monospace">@est.Carnet</span></td>
+                                    <td class="fw-semibold">@est.NombreCompleto</td>
+                                    <td>@(est.Grupo?.NombreGrupo ?? "Sin Grupo")</td>
+                                    <td>Ciclo @(est.Grupo?.ciclo ?? 1) - @(est.Grupo?.AnioLectivo ?? DateTime.Now.Year)</td>
+                                    <td>
+                                        <span class="badge bg-info-subtle text-info border border-info-subtle">
+                                            @est.Historiales.Count análisis
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => EliminarEstudianteAsync(est.IdEstudiante)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Vista 2: Importación Masiva -->
+    @if (pestanaActiva == "masiva")
+    {
+        <div class="card card-modern p-4">
+            <h5 class="fw-bold mb-3"><i class="bi bi-cloud-arrow-up text-primary me-2"></i>Carga Masiva de Estudiantes</h5>
+            <p class="text-secondary small">
+                Pega aquí una lista de alumnos o escribe uno por línea en formato: <code>CARNET, NOMBRE COMPLETO</code> (ej. <code>SMIS001224, Juan Pérez López</code>).
+            </p>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Grupo de Destino:</label>
+                    <select class="form-select" @bind="grupoDestinoMasivoId">
+                        @foreach (var g in listaGrupos)
+                        {
+                            <option value="@g.IdGrupo">@g.NombreGrupo (Año @g.AnioLectivo - Ciclo @g.ciclo)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">Datos de Estudiantes:</label>
+                <textarea class="form-control font-monospace" rows="8" placeholder="SMIS000124, Roberto Carlos Sánchez&#10;SMIS000224, María Elena Cruz&#10;SMIS000324, Carlos Alberto Ramos" @bind="textoCargaMasiva"></textarea>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <button class="btn btn-secondary" @onclick="() => textoCargaMasiva = string.Empty">Limpiar</button>
+                <button class="btn btn-primary" @onclick="ProcesarCargaMasivaAsync" disabled="@string.IsNullOrWhiteSpace(textoCargaMasiva)">
+                    <i class="bi bi-upload me-1"></i> Procesar e Importar Estudiantes
+                </button>
+            </div>
+        </div>
+    }
+
+    <!-- Vista 3: Respaldos ZIP -->
+    @if (pestanaActiva == "respaldos")
+    {
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card card-modern p-4 h-100">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-box-arrow-down text-success me-2"></i>Exportar Grupo (.ZIP)</h5>
+                    <p class="text-secondary small">
+                        Descarga un archivo comprimido .zip que contiene el esquema JSON con la lista de estudiantes, historiales de análisis de plagio y evaluaciones del grupo seleccionado.
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Seleccionar Grupo a Exportar:</label>
+                        <select class="form-select" @bind="grupoExportarId">
+                            @foreach (var g in listaGrupos)
+                            {
+                                <option value="@g.IdGrupo">@g.NombreGrupo (Total alumnos: @g.Estudiantes.Count)</option>
+                            }
+                        </select>
+                    </div>
+
+                    <button class="btn btn-success mt-auto" @onclick="ExportarZipGrupoAsync" disabled="@(grupoExportarId == 0)">
+                        <i class="bi bi-download me-1"></i> Generar y Descargar Respaldo .ZIP
+                    </button>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card card-modern p-4 h-100">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-box-arrow-in-up text-primary me-2"></i>Restaurar desde Respaldo (.ZIP)</h5>
+                    <p class="text-secondary small">
+                        Carga un paquete comprimido .zip generado previamente por PlagScan Pro. Se creará un nuevo grupo con todos los registros e historiales preservados.
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Archivo ZIP de Respaldo:</label>
+                        <InputFile OnChange="ImportarZipGrupoAsync" class="form-control" accept=".zip" />
+                    </div>
+
+                    @if (procesandoZip)
+                    {
+                        <div class="d-flex align-items-center gap-2 text-primary mt-2">
+                            <span class="spinner-border spinner-border-sm"></span>
+                            <span>Descomprimiendo y restaurando datos en SQLite...</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Modal Nuevo Grupo -->
+@if (mostrarModalGrupo)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);">
+        <div class="modal-dialog">
+            <div class="modal-content card-modern p-3">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Crear Nuevo Grupo</h5>
+                    <button type="button" class="btn-close" @onclick="() => mostrarModalGrupo = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Nombre del Grupo</label>
+                        <input type="text" class="form-control" placeholder="Ej: Programación 1 - Sección A" @bind="nuevoGrupo.NombreGrupo" />
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-semibold">Año Lectivo</label>
+                            <input type="number" class="form-control" @bind="nuevoGrupo.AnioLectivo" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-semibold">Ciclo</label>
+                            <select class="form-select" @bind="nuevoGrupo.ciclo">
+                                <option value="1">Ciclo 1</option>
+                                <option value="2">Ciclo 2</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button class="btn btn-secondary" @onclick="() => mostrarModalGrupo = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="GuardarGrupoAsync">Guardar Grupo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal Nuevo Estudiante -->
+@if (mostrarModalEstudiante)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);">
+        <div class="modal-dialog">
+            <div class="modal-content card-modern p-3">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Registrar Estudiante</h5>
+                    <button type="button" class="btn-close" @onclick="() => mostrarModalEstudiante = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Carnet</label>
+                        <input type="text" class="form-control" placeholder="Ej: SMIS023424" @bind="nuevoEstudiante.Carnet" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Nombre Completo</label>
+                        <input type="text" class="form-control" placeholder="Ej: Juan Carlos Morales" @bind="nuevoEstudiante.NombreCompleto" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Grupo Asignado</label>
+                        <select class="form-select" @bind="nuevoEstudiante.IdGrupo">
+                            @foreach (var g in listaGrupos)
+                            {
+                                <option value="@g.IdGrupo">@g.NombreGrupo</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button class="btn btn-secondary" @onclick="() => mostrarModalEstudiante = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="GuardarEstudianteAsync">Registrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Grupo> listaGrupos = new();
+    private List<Estudiante> todosEstudiantes = new();
+    private List<Estudiante> estudiantesFiltrados = new();
+
+    private string pestanaActiva = "estudiantes";
+    private bool cargando = true;
+    private string? mensajeAlerta;
+    private string tipoAlerta = "success";
+
+    private int filtroGrupoId = 0;
+    private int filtroCiclo = 0;
+    private int? filtroAnio;
+    private string busquedaTexto = string.Empty;
+
+    // Modales y entidades temporales
+    private bool mostrarModalGrupo = false;
+    private Grupo nuevoGrupo = new() { AnioLectivo = DateTime.Now.Year, ciclo = 1 };
+
+    private bool mostrarModalEstudiante = false;
+    private Estudiante nuevoEstudiante = new();
+
+    // Importación masiva
+    private int grupoDestinoMasivoId;
+    private string textoCargaMasiva = string.Empty;
+
+    // Respaldos
+    private int grupoExportarId;
+    private bool procesandoZip = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarGruposAsync();
+        await CargarEstudiantesAsync();
+    }
+
+    private async Task CargarGruposAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        listaGrupos = await db.grupos
+            .Include(g => g.Estudiantes)
+            .OrderByDescending(g => g.AnioLectivo)
+            .ThenBy(g => g.ciclo)
+            .ToListAsync();
+
+        if (listaGrupos.Any())
+        {
+            if (grupoDestinoMasivoId == 0) grupoDestinoMasivoId = listaGrupos.First().IdGrupo;
+            if (grupoExportarId == 0) grupoExportarId = listaGrupos.First().IdGrupo;
+            if (nuevoEstudiante.IdGrupo == 0) nuevoEstudiante.IdGrupo = listaGrupos.First().IdGrupo;
+        }
+    }
+
+    private async Task CargarEstudiantesAsync()
+    {
+        cargando = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var query = db.Estudiantes
+                .Include(e => e.Grupo)
+                .Include(e => e.Historiales)
+                .AsQueryable();
+
+            if (filtroGrupoId > 0)
+            {
+                query = query.Where(e => e.IdGrupo == filtroGrupoId);
+            }
+
+            todosEstudiantes = await query.ToListAsync();
+            AplicarFiltros();
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al cargar estudiantes: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void AplicarFiltros()
+    {
+        var filtrados = todosEstudiantes.AsEnumerable();
+
+        if (filtroCiclo > 0)
+        {
+            filtrados = filtrados.Where(e => e.Grupo != null && e.Grupo.ciclo == filtroCiclo);
+        }
+
+        if (filtroAnio.HasValue && filtroAnio.Value > 0)
+        {
+            filtrados = filtrados.Where(e => e.Grupo != null && e.Grupo.AnioLectivo == filtroAnio.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(busquedaTexto))
+        {
+            string term = busquedaTexto.Trim().ToLowerInvariant();
+            filtrados = filtrados.Where(e =>
+                e.Carnet.ToLowerInvariant().Contains(term) ||
+                e.NombreCompleto.ToLowerInvariant().Contains(term));
+        }
+
+        estudiantesFiltrados = filtrados.ToList();
+    }
+
+    private void ResetFiltros()
+    {
+        filtroGrupoId = 0;
+        filtroCiclo = 0;
+        filtroAnio = null;
+        busquedaTexto = string.Empty;
+        AplicarFiltros();
+    }
+
+    private async Task GuardarGrupoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(nuevoGrupo.NombreGrupo))
+        {
+            mensajeAlerta = "El nombre del grupo no puede estar vacío.";
+            tipoAlerta = "danger";
+            return;
+        }
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.grupos.Add(nuevoGrupo);
+            await db.SaveChangesAsync();
+
+            mensajeAlerta = $"Grupo '{nuevoGrupo.NombreGrupo}' creado exitosamente.";
+            tipoAlerta = "success";
+            mostrarModalGrupo = false;
+            nuevoGrupo = new Grupo { AnioLectivo = DateTime.Now.Year, ciclo = 1 };
+
+            await CargarGruposAsync();
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al crear grupo: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task GuardarEstudianteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(nuevoEstudiante.Carnet) || string.IsNullOrWhiteSpace(nuevoEstudiante.NombreCompleto))
+        {
+            mensajeAlerta = "Debe ingresar el carnet y el nombre completo del estudiante.";
+            tipoAlerta = "danger";
+            return;
+        }
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            bool existe = await db.Estudiantes.AnyAsync(e => e.Carnet == nuevoEstudiante.Carnet && e.IdGrupo == nuevoEstudiante.IdGrupo);
+            if (existe)
+            {
+                mensajeAlerta = $"El carnet '{nuevoEstudiante.Carnet}' ya está registrado en este grupo.";
+                tipoAlerta = "danger";
+                return;
+            }
+
+            db.Estudiantes.Add(nuevoEstudiante);
+            await db.SaveChangesAsync();
+
+            mensajeAlerta = $"Estudiante '{nuevoEstudiante.NombreCompleto}' agregado exitosamente.";
+            tipoAlerta = "success";
+            mostrarModalEstudiante = false;
+            nuevoEstudiante = new Estudiante { IdGrupo = nuevoEstudiante.IdGrupo };
+
+            await CargarEstudiantesAsync();
+            await CargarGruposAsync();
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al registrar estudiante: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task EliminarEstudianteAsync(int idEstudiante)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var est = await db.Estudiantes.FindAsync(idEstudiante);
+            if (est != null)
+            {
+                db.Estudiantes.Remove(est);
+                await db.SaveChangesAsync();
+
+                mensajeAlerta = "Estudiante eliminado correctamente.";
+                tipoAlerta = "success";
+                await CargarEstudiantesAsync();
+                await CargarGruposAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al eliminar: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task ProcesarCargaMasivaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(textoCargaMasiva)) return;
+
+        try
+        {
+            var lineas = textoCargaMasiva.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            int agregados = 0;
+            int duplicados = 0;
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            foreach (var l in lineas)
+            {
+                var partes = l.Split(',', StringSplitOptions.TrimEntries);
+                if (partes.Length >= 2)
+                {
+                    string carnet = partes[0];
+                    string nombre = partes[1];
+
+                    bool existe = await db.Estudiantes.AnyAsync(e => e.Carnet == carnet && e.IdGrupo == grupoDestinoMasivoId);
+                    if (!existe)
+                    {
+                        db.Estudiantes.Add(new Estudiante
+                        {
+                            Carnet = carnet,
+                            NombreCompleto = nombre,
+                            IdGrupo = grupoDestinoMasivoId
+                        });
+                        agregados++;
+                    }
+                    else
+                    {
+                        duplicados++;
+                    }
+                }
+            }
+
+            await db.SaveChangesAsync();
+            textoCargaMasiva = string.Empty;
+            mensajeAlerta = $"Carga completada: {agregados} alumnos importados. ({duplicados} omitidos por ya existir).";
+            tipoAlerta = "success";
+            pestanaActiva = "estudiantes";
+
+            await CargarEstudiantesAsync();
+            await CargarGruposAsync();
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error en carga masiva: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task ExportarZipGrupoAsync()
+    {
+        if (grupoExportarId == 0) return;
+
+        try
+        {
+            byte[] zipBytes = await GestorRespaldos.ExportarGrupoZipAsync(grupoExportarId);
+            string base64 = Convert.ToBase64String(zipBytes);
+            string nombreArchivo = $"respaldo_grupo_{grupoExportarId}_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+
+            await JS.InvokeVoidAsync("descargarBytesZip", nombreArchivo, base64);
+            mensajeAlerta = $"Copia de seguridad descargada exitosamente ({zipBytes.Length / 1024.0:F1} KB).";
+            tipoAlerta = "success";
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al generar respaldo ZIP: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task ImportarZipGrupoAsync(InputFileChangeEventArgs e)
+    {
+        procesandoZip = true;
+        mensajeAlerta = null;
+
+        try
+        {
+            var file = e.File;
+            if (file == null) return;
+
+            using var stream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024); // Máximo 20 MB
+            string msg = await GestorRespaldos.ImportarGrupoZipAsync(stream);
+
+            mensajeAlerta = msg;
+            tipoAlerta = "success";
+            await CargarGruposAsync();
+            await CargarEstudiantesAsync();
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Falla al restaurar archivo .ZIP: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+        finally
+        {
+            procesandoZip = false;
+        }
+    }
+}

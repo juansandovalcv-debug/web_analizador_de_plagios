@@ -1,29 +1,47 @@
-using Microsoft.AspNetCore.Hosting.Builder;
 using Microsoft.EntityFrameworkCore;
 using web_analizador_de_plagios.Components;
 using web_analizador_de_plagios.Data.Models;
+using web_analizador_de_plagios.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite("Data Source=sistema_plagio.db"));
+
+string connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+    ?? "Data Source=sistema_plagio.db";
+
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+builder.Services.AddScoped(sp => 
+    sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
+
+builder.Services.AddScoped<GestorRespaldos>();
+
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
+    using var db = factory.CreateDbContext();
+    db.Database.EnsureCreated();
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
-
 app.UseAntiforgery();
 
-app.MapStaticAssets();
+app.UseStaticFiles();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
