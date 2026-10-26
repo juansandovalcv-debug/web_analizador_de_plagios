@@ -1,0 +1,395 @@
+@page "/evaluaciones"
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Gestión de Evaluaciones</PageTitle>
+
+<div class="container-fluid p-0">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h2 class="fw-bold m-0"><i class="bi bi-journal-bookmark-fill text-primary me-2"></i>Gestión de Evaluaciones</h2>
+            <p class="text-secondary small m-0">Administración completa (CRUD), búsqueda interactiva y validación de tareas académicas</p>
+        </div>
+
+        <button class="btn btn-primary btn-sm" @onclick="AbrirModalCrear">
+            <i class="bi bi-plus-circle me-1"></i> Nueva Evaluación
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(mensajeAlerta))
+    {
+        <div class="alert @(tipoAlerta == "success" ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+            <i class="bi @(tipoAlerta == "success" ? "bi-check-circle" : "bi-exclamation-triangle") me-2"></i>
+            @mensajeAlerta
+            <button type="button" class="btn-close" @onclick="() => mensajeAlerta = null"></button>
+        </div>
+    }
+
+    <!-- Búsqueda interactiva y Filtros -->
+    <div class="card card-modern mb-4 p-3">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-5">
+                <label class="form-label small fw-semibold text-secondary">Búsqueda Interactiva (Nombre de Asignación / Tarea)</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" placeholder="Buscar por tema, laboratorio o tarea..." @bind="busquedaTexto" @bind:event="oninput" @bind:after="FiltrarEvaluaciones" />
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold text-secondary">Filtrar por Cómputo</label>
+                <select class="form-select form-select-sm" @bind="filtroComputo" @bind:after="FiltrarEvaluaciones">
+                    <option value="0">-- Todos los Cómputos --</option>
+                    <option value="1">Cómputo 1</option>
+                    <option value="2">Cómputo 2</option>
+                    <option value="3">Cómputo 3</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold text-secondary">Año de Registro</label>
+                <input type="number" class="form-control form-control-sm" placeholder="Año..." @bind="filtroAnio" @bind:after="FiltrarEvaluaciones" />
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-outline-secondary btn-sm w-100" @onclick="ResetFiltros">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla CRUD de Evaluaciones -->
+    <div class="card card-modern p-3">
+        @if (cargando)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="text-secondary mt-2">Cargando evaluaciones...</p>
+            </div>
+        }
+        else if (!evaluacionesFiltradas.Any())
+        {
+            <div class="text-center py-5">
+                <i class="bi bi-inbox text-secondary fs-1"></i>
+                <p class="text-secondary mt-2">No se encontraron evaluaciones registradas con los filtros actuales.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr class="text-secondary">
+                            <th># ID</th>
+                            <th>Nombre de la Asignación / Tarea</th>
+                            <th>Cómputo</th>
+                            <th>Fecha de Evaluación</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var ev in evaluacionesFiltradas)
+                        {
+                            <tr>
+                                <td class="text-secondary small font-monospace">#@ev.IdEvaluacion</td>
+                                <td class="fw-semibold">@ev.NombreTarea</td>
+                                <td>
+                                    <span class="badge @(ev.Computo == 1 ? "bg-primary" : ev.Computo == 2 ? "bg-info" : "bg-warning text-dark")">
+                                        Cómputo @ev.Computo
+                                    </span>
+                                </td>
+                                <td>@ev.FechaEvaluacion.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-end">
+                                    <button class="btn btn-outline-primary btn-sm me-1" @onclick="() => AbrirModalEditar(ev)" title="Editar Evaluación">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => ConfirmarEliminar(ev.IdEvaluacion)" title="Eliminar Evaluación">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal Formulario CRUD con Validación Completa -->
+@if (mostrarModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);">
+        <div class="modal-dialog">
+            <div class="modal-content card-modern p-3">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi @(esEdicion ? "bi-pencil-square text-primary" : "bi-plus-circle text-success") me-2"></i>
+                        @(esEdicion ? "Editar Evaluación Académica" : "Nueva Evaluación Académica")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Validación visual de errores -->
+                    @if (erroresValidacion.Any())
+                    {
+                        <div class="alert alert-danger py-2 small mb-3">
+                            <ul class="mb-0 ps-3">
+                                @foreach (var err in erroresValidacion)
+                                {
+                                    <li>@err</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Nombre de la Tarea / Laboratorio: <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control @(erroresValidacion.Any(e => e.Contains("nombre")) ? "is-invalid" : "")" 
+                               placeholder="Ej: Laboratorio 1 - Algoritmos Recursivos" 
+                               @bind="evaluacionFormulario.NombreTarea" />
+                        <div class="form-text small text-secondary">Mínimo 4 caracteres. Debe ser descriptivo de la práctica.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Cómputo Académico: <span class="text-danger">*</span></label>
+                        <select class="form-select @(erroresValidacion.Any(e => e.Contains("cómputo")) ? "is-invalid" : "")" 
+                                @bind="evaluacionFormulario.Computo">
+                            <option value="1">Cómputo 1</option>
+                            <option value="2">Cómputo 2</option>
+                            <option value="3">Cómputo 3</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Fecha de Evaluación: <span class="text-danger">*</span></label>
+                        <input type="datetime-local" class="form-control" @bind="evaluacionFormulario.FechaEvaluacion" />
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button class="btn btn-secondary" @onclick="CerrarModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="GuardarEvaluacionAsync">
+                        <i class="bi bi-check2-circle me-1"></i>
+                        @(esEdicion ? "Actualizar Cambios" : "Guardar Evaluación")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Evaluacion> todasEvaluaciones = new();
+    private List<Evaluacion> evaluacionesFiltradas = new();
+
+    private bool cargando = true;
+    private string? mensajeAlerta;
+    private string tipoAlerta = "success";
+
+    // Filtros de búsqueda interactiva
+    private string busquedaTexto = string.Empty;
+    private int filtroComputo = 0;
+    private int? filtroAnio;
+
+    // Estado de Modal y Validación
+    private bool mostrarModal = false;
+    private bool esEdicion = false;
+    private Evaluacion evaluacionFormulario = new() { Computo = 1, FechaEvaluacion = DateTime.Now };
+    private List<string> erroresValidacion = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarEvaluacionesAsync();
+    }
+
+    private async Task CargarEvaluacionesAsync()
+    {
+        cargando = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            todasEvaluaciones = await db.Evaluacion
+                .OrderByDescending(e => e.FechaEvaluacion)
+                .ToListAsync();
+
+            FiltrarEvaluaciones();
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al cargar evaluaciones: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void FiltrarEvaluaciones()
+    {
+        var query = todasEvaluaciones.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(busquedaTexto))
+        {
+            string term = busquedaTexto.Trim().ToLowerInvariant();
+            query = query.Where(e => e.NombreTarea.ToLowerInvariant().Contains(term));
+        }
+
+        if (filtroComputo > 0)
+        {
+            query = query.Where(e => e.Computo == filtroComputo);
+        }
+
+        if (filtroAnio.HasValue && filtroAnio.Value > 0)
+        {
+            query = query.Where(e => e.FechaEvaluacion.Year == filtroAnio.Value);
+        }
+
+        evaluacionesFiltradas = query.ToList();
+    }
+
+    private void ResetFiltros()
+    {
+        busquedaTexto = string.Empty;
+        filtroComputo = 0;
+        filtroAnio = null;
+        FiltrarEvaluaciones();
+    }
+
+    private void AbrirModalCrear()
+    {
+        esEdicion = false;
+        evaluacionFormulario = new Evaluacion { Computo = 1, FechaEvaluacion = DateTime.Now };
+        erroresValidacion.Clear();
+        mostrarModal = true;
+    }
+
+    private void AbrirModalEditar(Evaluacion ev)
+    {
+        esEdicion = true;
+        evaluacionFormulario = new Evaluacion
+        {
+            IdEvaluacion = ev.IdEvaluacion,
+            NombreTarea = ev.NombreTarea,
+            Computo = ev.Computo,
+            FechaEvaluacion = ev.FechaEvaluacion
+        };
+        erroresValidacion.Clear();
+        mostrarModal = true;
+    }
+
+    private void CerrarModal()
+    {
+        mostrarModal = false;
+        erroresValidacion.Clear();
+    }
+
+    // Validación rigurosa de los campos
+    private bool ValidarFormulario()
+    {
+        erroresValidacion.Clear();
+
+        if (string.IsNullOrWhiteSpace(evaluacionFormulario.NombreTarea))
+        {
+            erroresValidacion.Add("El nombre de la evaluación es obligatorio.");
+        }
+        else if (evaluacionFormulario.NombreTarea.Trim().Length < 4)
+        {
+            erroresValidacion.Add("El nombre de la evaluación debe tener al menos 4 caracteres.");
+        }
+
+        if (evaluacionFormulario.Computo < 1 || evaluacionFormulario.Computo > 3)
+        {
+            erroresValidacion.Add("El cómputo seleccionado debe ser válido (1, 2 o 3).");
+        }
+
+        if (evaluacionFormulario.FechaEvaluacion == default)
+        {
+            erroresValidacion.Add("La fecha de evaluación debe ser válida.");
+        }
+
+        return !erroresValidacion.Any();
+    }
+
+    private async Task GuardarEvaluacionAsync()
+    {
+        if (!ValidarFormulario()) return;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            if (esEdicion)
+            {
+                var evDb = await db.Evaluacion.FindAsync(evaluacionFormulario.IdEvaluacion);
+                if (evDb != null)
+                {
+                    evDb.NombreTarea = evaluacionFormulario.NombreTarea.Trim();
+                    evDb.Computo = evaluacionFormulario.Computo;
+                    evDb.FechaEvaluacion = evaluacionFormulario.FechaEvaluacion;
+
+                    await db.SaveChangesAsync();
+                    mensajeAlerta = $"Evaluación '{evDb.NombreTarea}' actualizada exitosamente.";
+                    tipoAlerta = "success";
+                }
+            }
+            else
+            {
+                // Validación de no duplicar mismo nombre en mismo cómputo
+                bool duplicado = await db.Evaluacion.AnyAsync(e => 
+                    e.NombreTarea.ToLower() == evaluacionFormulario.NombreTarea.Trim().ToLower() && 
+                    e.Computo == evaluacionFormulario.Computo);
+
+                if (duplicado)
+                {
+                    erroresValidacion.Add($"Ya existe una evaluación con el nombre '{evaluacionFormulario.NombreTarea}' en el Cómputo {evaluacionFormulario.Computo}.");
+                    return;
+                }
+
+                db.Evaluacion.Add(new Evaluacion
+                {
+                    NombreTarea = evaluacionFormulario.NombreTarea.Trim(),
+                    Computo = evaluacionFormulario.Computo,
+                    FechaEvaluacion = evaluacionFormulario.FechaEvaluacion
+                });
+
+                await db.SaveChangesAsync();
+                mensajeAlerta = $"Evaluación '{evaluacionFormulario.NombreTarea}' registrada exitosamente.";
+                tipoAlerta = "success";
+            }
+
+            CerrarModal();
+            await CargarEvaluacionesAsync();
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al procesar la evaluación: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task ConfirmarEliminar(int idEvaluacion)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var ev = await db.Evaluacion.FindAsync(idEvaluacion);
+            if (ev != null)
+            {
+                db.Evaluacion.Remove(ev);
+                await db.SaveChangesAsync();
+
+                mensajeAlerta = $"Evaluación eliminada correctamente.";
+                tipoAlerta = "success";
+                await CargarEvaluacionesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al eliminar evaluación: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+}

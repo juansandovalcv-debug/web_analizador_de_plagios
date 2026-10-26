@@ -1,0 +1,297 @@
+@page "/historico"
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Histórico & Tendencias</PageTitle>
+
+<div class="container-fluid p-0">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h2 class="fw-bold m-0"><i class="bi bi-graph-up-arrow text-primary me-2"></i>Histórico & Tendencias de Plagio e IA</h2>
+            <p class="text-secondary small m-0">Monitoreo evolutivo del comportamiento por estudiante y grupo a través de los Cómputos 1, 2 y 3</p>
+        </div>
+    </div>
+
+    <!-- Filtros de Grupo y Estudiante -->
+    <div class="card card-modern p-3 mb-4">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-5">
+                <label class="form-label small fw-semibold text-secondary">Filtrar por Grupo:</label>
+                <select class="form-select form-select-sm" @bind="grupoSeleccionadoId" @bind:after="CargarEstudiantesGrupoAsync">
+                    <option value="0">-- Todos los Grupos --</option>
+                    @foreach (var g in listaGrupos)
+                    {
+                        <option value="@g.IdGrupo">@g.NombreGrupo (Año @g.AnioLectivo - Ciclo @g.ciclo)</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-5">
+                <label class="form-label small fw-semibold text-secondary">Filtrar por Estudiante:</label>
+                <select class="form-select form-select-sm" @bind="estudianteSeleccionadoId" @bind:after="FiltrarTendencias">
+                    <option value="0">-- Todos los Estudiantes --</option>
+                    @foreach (var est in listaEstudiantes)
+                    {
+                        <option value="@est.IdEstudiante">@est.Carnet - @est.NombreCompleto</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-outline-secondary btn-sm w-100" @onclick="ResetFiltros">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Todos
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicadores Globales de la Muestra -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card card-modern p-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="p-3 rounded-circle bg-danger-subtle text-danger fs-3">
+                        <i class="bi bi-copy"></i>
+                    </div>
+                    <div>
+                        <div class="text-secondary small fw-semibold">Promedio General Plagio</div>
+                        <h3 class="fw-bold m-0 text-danger">@promedioPlagio%</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card card-modern p-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="p-3 rounded-circle bg-warning-subtle text-warning fs-3">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div>
+                        <div class="text-secondary small fw-semibold">Promedio Probabilidad IA</div>
+                        <h3 class="fw-bold m-0 text-warning">@promedioIA%</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card card-modern p-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="p-3 rounded-circle bg-primary-subtle text-primary fs-3">
+                        <i class="bi bi-clipboard2-data"></i>
+                    </div>
+                    <div>
+                        <div class="text-secondary small fw-semibold">Total Análisis Registrados</div>
+                        <h3 class="fw-bold m-0 text-primary">@historicosFiltrados.Count</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barras Visuales de Evolución por Cómputos (1, 2, 3) -->
+    <div class="card card-modern p-4 mb-4">
+        <h5 class="fw-bold mb-3"><i class="bi bi-bar-chart-line-fill text-primary me-2"></i>Evolución Comparativa por Cómputo (C1, C2, C3)</h5>
+        
+        <div class="row g-4">
+            @for (int c = 1; c <= 3; c++)
+            {
+                int computoNum = c;
+                var itemsComputo = historicosFiltrados.Where(h => h.Evaluacion != null && h.Evaluacion.Computo == computoNum).ToList();
+                double avgPlagio = itemsComputo.Any() ? Math.Round(itemsComputo.Average(h => h.PorcentajePlagio), 1) : 0;
+                double avgIA = itemsComputo.Any() ? Math.Round(itemsComputo.Average(h => h.PorcentajeIA), 1) : 0;
+
+                <div class="col-md-4">
+                    <div class="p-3 rounded bg-body-tertiary border">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="badge bg-primary fs-6">Cómputo @computoNum</span>
+                            <span class="text-secondary small">@itemsComputo.Count entregas</span>
+                        </div>
+
+                        <!-- Barra Plagio -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="text-secondary">Similitud Plagio:</span>
+                                <span class="fw-bold text-danger">@avgPlagio%</span>
+                            </div>
+                            <div class="progress progress-thin">
+                                <div class="progress-bar bg-danger" role="progressbar" style="width: @avgPlagio%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Barra IA -->
+                        <div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="text-secondary">Generación IA:</span>
+                                <span class="fw-bold text-warning">@avgIA%</span>
+                            </div>
+                            <div class="progress progress-thin">
+                                <div class="progress-bar bg-warning" role="progressbar" style="width: @avgIA%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Desglose por Estudiante con Barras Visuales -->
+    <div class="card card-modern p-4">
+        <h5 class="fw-bold mb-3"><i class="bi bi-person-lines-fill text-primary me-2"></i>Desglose Individual de Entregas & Métricas</h5>
+
+        @if (!historicosFiltrados.Any())
+        {
+            <div class="text-center py-4 text-secondary">
+                <i class="bi bi-inbox fs-2"></i>
+                <p class="mt-2 mb-0">No se encontraron historiales para los filtros seleccionados.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr class="text-secondary">
+                            <th>Estudiante</th>
+                            <th>Carnet</th>
+                            <th>Evaluación / Tarea</th>
+                            <th>Cómputo</th>
+                            <th style="min-width: 180px;">% Plagio</th>
+                            <th style="min-width: 180px;">% IA</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in historicosFiltrados)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@(h.Estudiante?.NombreCompleto ?? "N/A")</td>
+                                <td><span class="badge bg-secondary font-monospace">@(h.Estudiante?.Carnet ?? "N/A")</span></td>
+                                <td>@(h.Evaluacion?.NombreTarea ?? "N/A")</td>
+                                <td><span class="badge bg-info-subtle text-info">Cómputo @(h.Evaluacion?.Computo ?? 1)</span></td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1 progress-thin">
+                                            <div class="progress-bar bg-danger" style="width: @h.PorcentajePlagio%"></div>
+                                        </div>
+                                        <span class="small fw-bold text-danger" style="min-width: 45px;">@h.PorcentajePlagio%</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1 progress-thin">
+                                            <div class="progress-bar bg-warning" style="width: @h.PorcentajeIA%"></div>
+                                        </div>
+                                        <span class="small fw-bold text-warning" style="min-width: 45px;">@h.PorcentajeIA%</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (h.PorcentajePlagio > 60 || h.PorcentajeIA > 60)
+                                    {
+                                        <span class="badge bg-danger"><i class="bi bi-exclamation-octagon me-1"></i>Crítico</span>
+                                    }
+                                    else if (h.PorcentajePlagio > 30 || h.PorcentajeIA > 30)
+                                    {
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Moderado</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Limpio</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Grupo> listaGrupos = new();
+    private List<Estudiante> listaEstudiantes = new();
+    private List<HistorialAnalisis> todosHistoricos = new();
+    private List<HistorialAnalisis> historicosFiltrados = new();
+
+    private int grupoSeleccionadoId = 0;
+    private int estudianteSeleccionadoId = 0;
+
+    private double promedioPlagio = 0;
+    private double promedioIA = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        listaGrupos = await db.grupos.OrderBy(g => g.NombreGrupo).ToListAsync();
+        await CargarHistoricosAsync();
+    }
+
+    private async Task CargarHistoricosAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        todosHistoricos = await db.Evaluaciones
+            .Include(h => h.Estudiante)
+            .Include(h => h.Evaluacion)
+            .OrderByDescending(h => h.IdHistorial)
+            .ToListAsync();
+
+        FiltrarTendencias();
+    }
+
+    private async Task CargarEstudiantesGrupoAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (grupoSeleccionadoId > 0)
+        {
+            listaEstudiantes = await db.Estudiantes
+                .Where(e => e.IdGrupo == grupoSeleccionadoId)
+                .OrderBy(e => e.NombreCompleto)
+                .ToListAsync();
+        }
+        else
+        {
+            listaEstudiantes = await db.Estudiantes.OrderBy(e => e.NombreCompleto).ToListAsync();
+        }
+
+        estudianteSeleccionadoId = 0;
+        FiltrarTendencias();
+    }
+
+    private void FiltrarTendencias()
+    {
+        var query = todosHistoricos.AsEnumerable();
+
+        if (grupoSeleccionadoId > 0)
+        {
+            query = query.Where(h => h.Estudiante != null && h.Estudiante.IdGrupo == grupoSeleccionadoId);
+        }
+
+        if (estudianteSeleccionadoId > 0)
+        {
+            query = query.Where(h => h.IdEstudiante == estudianteSeleccionadoId);
+        }
+
+        historicosFiltrados = query.ToList();
+
+        if (historicosFiltrados.Any())
+        {
+            promedioPlagio = Math.Round(historicosFiltrados.Average(h => h.PorcentajePlagio), 1);
+            promedioIA = Math.Round(historicosFiltrados.Average(h => h.PorcentajeIA), 1);
+        }
+        else
+        {
+            promedioPlagio = 0;
+            promedioIA = 0;
+        }
+    }
+
+    private void ResetFiltros()
+    {
+        grupoSeleccionadoId = 0;
+        estudianteSeleccionadoId = 0;
+        FiltrarTendencias();
+    }
+}

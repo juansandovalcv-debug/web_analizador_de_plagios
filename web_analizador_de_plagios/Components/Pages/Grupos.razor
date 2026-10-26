@@ -11,14 +11,14 @@
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div>
             <h2 class="fw-bold m-0"><i class="bi bi-people-fill text-primary me-2"></i>Gestión de Grupos y Estudiantes</h2>
-            <p class="text-secondary small m-0">Administración de grupos lectivos, cómputos (1, 2, 3), importación masiva y respaldos .zip</p>
+            <p class="text-secondary small m-0">Administración de grupos lectivos, estudiantes, CRUD completo, filtros reactivos y respaldos .zip</p>
         </div>
 
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-primary btn-sm" @onclick="() => mostrarModalGrupo = true">
+            <button class="btn btn-outline-primary btn-sm" @onclick="AbrirModalCrearGrupo">
                 <i class="bi bi-folder-plus me-1"></i> Nuevo Grupo
             </button>
-            <button class="btn btn-primary btn-sm" @onclick="() => mostrarModalEstudiante = true">
+            <button class="btn btn-primary btn-sm" @onclick="AbrirModalCrearEstudiante">
                 <i class="bi bi-person-plus me-1"></i> Agregar Estudiante
             </button>
         </div>
@@ -33,52 +33,16 @@
         </div>
     }
 
-    <!-- Filtros de búsqueda -->
-    <div class="card card-modern mb-4 p-3">
-        <div class="row g-3 align-items-center">
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold text-secondary">Filtrar por Grupo</label>
-                <select class="form-select form-select-sm" @bind="filtroGrupoId" @bind:after="CargarEstudiantesAsync">
-                    <option value="0">-- Todos los Grupos --</option>
-                    @foreach (var g in listaGrupos)
-                    {
-                        <option value="@g.IdGrupo">@g.NombreGrupo (Año @g.AnioLectivo - Ciclo @g.ciclo)</option>
-                    }
-                </select>
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label small fw-semibold text-secondary">Ciclo</label>
-                <select class="form-select form-select-sm" @bind="filtroCiclo" @bind:after="AplicarFiltros">
-                    <option value="0">Todos</option>
-                    <option value="1">Ciclo 1</option>
-                    <option value="2">Ciclo 2</option>
-                </select>
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label small fw-semibold text-secondary">Año Lectivo</label>
-                <input type="number" class="form-control form-control-sm" placeholder="Ej: 2026" @bind="filtroAnio" @bind:after="AplicarFiltros" />
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold text-secondary">Buscar Carnet o Nombre</label>
-                <input type="text" class="form-control form-control-sm" placeholder="Buscar..." @bind="busquedaTexto" @bind:event="oninput" @bind:after="AplicarFiltros" />
-            </div>
-
-            <div class="col-md-2 d-flex align-items-end">
-                <button class="btn btn-outline-secondary btn-sm w-100" @onclick="ResetFiltros">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i> Limpiar
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Pestañas de Acciones: Listado / Importación Masiva / Respaldos ZIP -->
+    <!-- Pestañas de Navegación -->
     <ul class="nav nav-pills mb-3" role="tablist">
         <li class="nav-item">
             <button class="nav-link @(pestanaActiva == "estudiantes" ? "active" : "")" @onclick="@(() => pestanaActiva = "estudiantes")">
-                <i class="bi bi-table me-1"></i> Estudiantes (@estudiantesFiltrados.Count)
+                <i class="bi bi-person-lines-fill me-1"></i> Formulario de Estudiantes (@estudiantesFiltrados.Count)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(pestanaActiva == "grupos" ? "active" : "")" @onclick="@(() => pestanaActiva = "grupos")">
+                <i class="bi bi-collection me-1"></i> Formulario de Grupos (@gruposFiltrados.Count)
             </button>
         </li>
         <li class="nav-item">
@@ -93,9 +57,52 @@
         </li>
     </ul>
 
-    <!-- Vista 1: Estudiantes -->
+    <!-- VISTA 1: FORMULARIO CRUD & BÚSQUEDA DE ESTUDIANTES -->
     @if (pestanaActiva == "estudiantes")
     {
+        <div class="card card-modern mb-4 p-3">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Búsqueda Interactiva (Carnet o Nombre)</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" placeholder="Buscar carnet o nombre..." @bind="busquedaEstudianteTexto" @bind:event="oninput" @bind:after="AplicarFiltrosEstudiantes" />
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-secondary">Filtrar por Grupo</label>
+                    <select class="form-select form-select-sm" @bind="filtroGrupoId" @bind:after="AplicarFiltrosEstudiantes">
+                        <option value="0">-- Todos los Grupos --</option>
+                        @foreach (var g in listaGrupos)
+                        {
+                            <option value="@g.IdGrupo">@g.NombreGrupo (Año @g.AnioLectivo - Ciclo @g.ciclo)</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold text-secondary">Ciclo</label>
+                    <select class="form-select form-select-sm" @bind="filtroCiclo" @bind:after="AplicarFiltrosEstudiantes">
+                        <option value="0">Todos</option>
+                        <option value="1">Ciclo 1</option>
+                        <option value="2">Ciclo 2</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold text-secondary">Año Lectivo</label>
+                    <input type="number" class="form-control form-control-sm" placeholder="Año..." @bind="filtroAnio" @bind:after="AplicarFiltrosEstudiantes" />
+                </div>
+
+                <div class="col-md-1 d-flex align-items-end">
+                    <button class="btn btn-outline-secondary btn-sm w-100" @onclick="ResetFiltrosEstudiantes" title="Limpiar Filtros">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div class="card card-modern p-3">
             @if (cargando)
             {
@@ -123,7 +130,7 @@
                                 <th>Grupo Asignado</th>
                                 <th>Ciclo / Año</th>
                                 <th>Historiales</th>
-                                <th class="text-end">Acciones</th>
+                                <th class="text-end">Acciones (CRUD)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -141,7 +148,10 @@
                                         </span>
                                     </td>
                                     <td class="text-end">
-                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => EliminarEstudianteAsync(est.IdEstudiante)">
+                                        <button class="btn btn-outline-primary btn-sm me-1" @onclick="() => AbrirModalEditarEstudiante(est)" title="Modificar Estudiante">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => EliminarEstudianteAsync(est.IdEstudiante)" title="Eliminar Estudiante">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </td>
@@ -154,7 +164,87 @@
         </div>
     }
 
-    <!-- Vista 2: Importación Masiva -->
+    <!-- VISTA 2: FORMULARIO CRUD & BÚSQUEDA DE GRUPOS -->
+    @if (pestanaActiva == "grupos")
+    {
+        <div class="card card-modern mb-4 p-3">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">Búsqueda Interactiva de Grupos</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" placeholder="Buscar por nombre de sección o asignatura..." @bind="busquedaGrupoTexto" @bind:event="oninput" @bind:after="AplicarFiltrosGrupos" />
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-secondary">Ciclo</label>
+                    <select class="form-select form-select-sm" @bind="filtroGrupoCiclo" @bind:after="AplicarFiltrosGrupos">
+                        <option value="0">Todos los Ciclos</option>
+                        <option value="1">Ciclo 1</option>
+                        <option value="2">Ciclo 2</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-outline-secondary btn-sm w-100" @onclick="ResetFiltrosGrupos">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> Limpiar Búsqueda
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-modern p-3">
+            @if (!gruposFiltrados.Any())
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-folder-x text-secondary fs-1"></i>
+                    <p class="text-secondary mt-2">No se encontraron grupos que coincidan con la búsqueda.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr class="text-secondary">
+                                <th># ID</th>
+                                <th>Nombre del Grupo / Asignatura</th>
+                                <th>Año Lectivo</th>
+                                <th>Ciclo</th>
+                                <th>Estudiantes Inscritos</th>
+                                <th class="text-end">Acciones (CRUD)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var g in gruposFiltrados)
+                            {
+                                <tr>
+                                    <td class="text-secondary font-monospace">#@g.IdGrupo</td>
+                                    <td class="fw-semibold">@g.NombreGrupo</td>
+                                    <td>@g.AnioLectivo</td>
+                                    <td><span class="badge bg-primary">Ciclo @g.ciclo</span></td>
+                                    <td>
+                                        <span class="badge bg-secondary">@g.Estudiantes.Count alumnos</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-outline-primary btn-sm me-1" @onclick="() => AbrirModalEditarGrupo(g)" title="Modificar Grupo">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => EliminarGrupoAsync(g.IdGrupo)" title="Eliminar Grupo">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- VISTA 3: IMPORTACIÓN MASIVA -->
     @if (pestanaActiva == "masiva")
     {
         <div class="card card-modern p-4">
@@ -189,7 +279,7 @@
         </div>
     }
 
-    <!-- Vista 3: Respaldos ZIP -->
+    <!-- VISTA 4: RESPALDOS ZIP -->
     @if (pestanaActiva == "respaldos")
     {
         <div class="row g-4">
@@ -241,29 +331,45 @@
     }
 </div>
 
-<!-- Modal Nuevo Grupo -->
+<!-- MODAL FORMULARIO CRUD GRUPOS CON VALIDACIÓN -->
 @if (mostrarModalGrupo)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);">
         <div class="modal-dialog">
             <div class="modal-content card-modern p-3">
                 <div class="modal-header border-0">
-                    <h5 class="modal-title fw-bold">Crear Nuevo Grupo</h5>
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi @(esEdicionGrupo ? "bi-pencil-square text-primary" : "bi-folder-plus text-success") me-2"></i>
+                        @(esEdicionGrupo ? "Modificar Grupo" : "Crear Nuevo Grupo")
+                    </h5>
                     <button type="button" class="btn-close" @onclick="() => mostrarModalGrupo = false"></button>
                 </div>
                 <div class="modal-body">
+                    @if (erroresGrupo.Any())
+                    {
+                        <div class="alert alert-danger py-2 small mb-3">
+                            <ul class="mb-0 ps-3">
+                                @foreach (var err in erroresGrupo)
+                                {
+                                    <li>@err</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold">Nombre del Grupo</label>
-                        <input type="text" class="form-control" placeholder="Ej: Programación 1 - Sección A" @bind="nuevoGrupo.NombreGrupo" />
+                        <label class="form-label small fw-semibold">Nombre del Grupo / Asignatura: <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" placeholder="Ej: Programación 1 - Sección A" @bind="grupoFormulario.NombreGrupo" />
+                        <div class="form-text small text-secondary">Mínimo 3 caracteres.</div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label small fw-semibold">Año Lectivo</label>
-                            <input type="number" class="form-control" @bind="nuevoGrupo.AnioLectivo" />
+                            <label class="form-label small fw-semibold">Año Lectivo: <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" @bind="grupoFormulario.AnioLectivo" />
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label small fw-semibold">Ciclo</label>
-                            <select class="form-select" @bind="nuevoGrupo.ciclo">
+                            <label class="form-label small fw-semibold">Ciclo: <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="grupoFormulario.ciclo">
                                 <option value="1">Ciclo 1</option>
                                 <option value="2">Ciclo 2</option>
                             </select>
@@ -272,35 +378,55 @@
                 </div>
                 <div class="modal-footer border-0">
                     <button class="btn btn-secondary" @onclick="() => mostrarModalGrupo = false">Cancelar</button>
-                    <button class="btn btn-primary" @onclick="GuardarGrupoAsync">Guardar Grupo</button>
+                    <button class="btn btn-primary" @onclick="GuardarGrupoAsync">
+                        <i class="bi bi-check2-circle me-1"></i>
+                        @(esEdicionGrupo ? "Actualizar Grupo" : "Guardar Grupo")
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 }
 
-<!-- Modal Nuevo Estudiante -->
+<!-- MODAL FORMULARIO CRUD ESTUDIANTES CON VALIDACIÓN -->
 @if (mostrarModalEstudiante)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);">
         <div class="modal-dialog">
             <div class="modal-content card-modern p-3">
                 <div class="modal-header border-0">
-                    <h5 class="modal-title fw-bold">Registrar Estudiante</h5>
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi @(esEdicionEstudiante ? "bi-pencil-square text-primary" : "bi-person-plus text-success") me-2"></i>
+                        @(esEdicionEstudiante ? "Modificar Estudiante" : "Registrar Estudiante")
+                    </h5>
                     <button type="button" class="btn-close" @onclick="() => mostrarModalEstudiante = false"></button>
                 </div>
                 <div class="modal-body">
+                    @if (erroresEstudiante.Any())
+                    {
+                        <div class="alert alert-danger py-2 small mb-3">
+                            <ul class="mb-0 ps-3">
+                                @foreach (var err in erroresEstudiante)
+                                {
+                                    <li>@err</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold">Carnet</label>
-                        <input type="text" class="form-control" placeholder="Ej: SMIS023424" @bind="nuevoEstudiante.Carnet" />
+                        <label class="form-label small fw-semibold">Carnet de Estudiante: <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control font-monospace" placeholder="Ej: SMIS023424" @bind="estudianteFormulario.Carnet" />
+                        <div class="form-text small text-secondary">Identificador único. Mínimo 4 caracteres alfanuméricos.</div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold">Nombre Completo</label>
-                        <input type="text" class="form-control" placeholder="Ej: Juan Carlos Morales" @bind="nuevoEstudiante.NombreCompleto" />
+                        <label class="form-label small fw-semibold">Nombre Completo: <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" placeholder="Ej: Juan Carlos Morales" @bind="estudianteFormulario.NombreCompleto" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold">Grupo Asignado</label>
-                        <select class="form-select" @bind="nuevoEstudiante.IdGrupo">
+                        <label class="form-label small fw-semibold">Grupo Asignado: <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="estudianteFormulario.IdGrupo">
+                            <option value="0">-- Seleccione Grupo --</option>
                             @foreach (var g in listaGrupos)
                             {
                                 <option value="@g.IdGrupo">@g.NombreGrupo</option>
@@ -310,7 +436,10 @@
                 </div>
                 <div class="modal-footer border-0">
                     <button class="btn btn-secondary" @onclick="() => mostrarModalEstudiante = false">Cancelar</button>
-                    <button class="btn btn-primary" @onclick="GuardarEstudianteAsync">Registrar</button>
+                    <button class="btn btn-primary" @onclick="GuardarEstudianteAsync">
+                        <i class="bi bi-check2-circle me-1"></i>
+                        @(esEdicionEstudiante ? "Actualizar Estudiante" : "Registrar Estudiante")
+                    </button>
                 </div>
             </div>
         </div>
@@ -319,6 +448,7 @@
 
 @code {
     private List<Grupo> listaGrupos = new();
+    private List<Grupo> gruposFiltrados = new();
     private List<Estudiante> todosEstudiantes = new();
     private List<Estudiante> estudiantesFiltrados = new();
 
@@ -327,23 +457,31 @@
     private string? mensajeAlerta;
     private string tipoAlerta = "success";
 
+    // Búsqueda y filtros Estudiantes
     private int filtroGrupoId = 0;
     private int filtroCiclo = 0;
     private int? filtroAnio;
-    private string busquedaTexto = string.Empty;
+    private string busquedaEstudianteTexto = string.Empty;
 
-    // Modales y entidades temporales
+    // Búsqueda y filtros Grupos
+    private string busquedaGrupoTexto = string.Empty;
+    private int filtroGrupoCiclo = 0;
+
+    // CRUD Grupos
     private bool mostrarModalGrupo = false;
-    private Grupo nuevoGrupo = new() { AnioLectivo = DateTime.Now.Year, ciclo = 1 };
+    private bool esEdicionGrupo = false;
+    private Grupo grupoFormulario = new() { AnioLectivo = DateTime.Now.Year, ciclo = 1 };
+    private List<string> erroresGrupo = new();
 
+    // CRUD Estudiantes
     private bool mostrarModalEstudiante = false;
-    private Estudiante nuevoEstudiante = new();
+    private bool esEdicionEstudiante = false;
+    private Estudiante estudianteFormulario = new();
+    private List<string> erroresEstudiante = new();
 
-    // Importación masiva
+    // Importación masiva y respaldos
     private int grupoDestinoMasivoId;
     private string textoCargaMasiva = string.Empty;
-
-    // Respaldos
     private int grupoExportarId;
     private bool procesandoZip = false;
 
@@ -366,8 +504,35 @@
         {
             if (grupoDestinoMasivoId == 0) grupoDestinoMasivoId = listaGrupos.First().IdGrupo;
             if (grupoExportarId == 0) grupoExportarId = listaGrupos.First().IdGrupo;
-            if (nuevoEstudiante.IdGrupo == 0) nuevoEstudiante.IdGrupo = listaGrupos.First().IdGrupo;
+            if (estudianteFormulario.IdGrupo == 0) estudianteFormulario.IdGrupo = listaGrupos.First().IdGrupo;
         }
+
+        AplicarFiltrosGrupos();
+    }
+
+    private void AplicarFiltrosGrupos()
+    {
+        var query = listaGrupos.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(busquedaGrupoTexto))
+        {
+            string term = busquedaGrupoTexto.Trim().ToLowerInvariant();
+            query = query.Where(g => g.NombreGrupo.ToLowerInvariant().Contains(term));
+        }
+
+        if (filtroGrupoCiclo > 0)
+        {
+            query = query.Where(g => g.ciclo == filtroGrupoCiclo);
+        }
+
+        gruposFiltrados = query.ToList();
+    }
+
+    private void ResetFiltrosGrupos()
+    {
+        busquedaGrupoTexto = string.Empty;
+        filtroGrupoCiclo = 0;
+        AplicarFiltrosGrupos();
     }
 
     private async Task CargarEstudiantesAsync()
@@ -376,18 +541,13 @@
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            var query = db.Estudiantes
+            todosEstudiantes = await db.Estudiantes
                 .Include(e => e.Grupo)
                 .Include(e => e.Historiales)
-                .AsQueryable();
+                .OrderBy(e => e.NombreCompleto)
+                .ToListAsync();
 
-            if (filtroGrupoId > 0)
-            {
-                query = query.Where(e => e.IdGrupo == filtroGrupoId);
-            }
-
-            todosEstudiantes = await query.ToListAsync();
-            AplicarFiltros();
+            AplicarFiltrosEstudiantes();
         }
         catch (Exception ex)
         {
@@ -400,9 +560,14 @@
         }
     }
 
-    private void AplicarFiltros()
+    private void AplicarFiltrosEstudiantes()
     {
         var filtrados = todosEstudiantes.AsEnumerable();
+
+        if (filtroGrupoId > 0)
+        {
+            filtrados = filtrados.Where(e => e.IdGrupo == filtroGrupoId);
+        }
 
         if (filtroCiclo > 0)
         {
@@ -414,9 +579,9 @@
             filtrados = filtrados.Where(e => e.Grupo != null && e.Grupo.AnioLectivo == filtroAnio.Value);
         }
 
-        if (!string.IsNullOrWhiteSpace(busquedaTexto))
+        if (!string.IsNullOrWhiteSpace(busquedaEstudianteTexto))
         {
-            string term = busquedaTexto.Trim().ToLowerInvariant();
+            string term = busquedaEstudianteTexto.Trim().ToLowerInvariant();
             filtrados = filtrados.Where(e =>
                 e.Carnet.ToLowerInvariant().Contains(term) ||
                 e.NombreCompleto.ToLowerInvariant().Contains(term));
@@ -425,79 +590,261 @@
         estudiantesFiltrados = filtrados.ToList();
     }
 
-    private void ResetFiltros()
+    private void ResetFiltrosEstudiantes()
     {
         filtroGrupoId = 0;
         filtroCiclo = 0;
         filtroAnio = null;
-        busquedaTexto = string.Empty;
-        AplicarFiltros();
+        busquedaEstudianteTexto = string.Empty;
+        AplicarFiltrosEstudiantes();
+    }
+
+    // OPERACIONES CRUD GRUPOS
+    private void AbrirModalCrearGrupo()
+    {
+        esEdicionGrupo = false;
+        grupoFormulario = new Grupo { AnioLectivo = DateTime.Now.Year, ciclo = 1 };
+        erroresGrupo.Clear();
+        mostrarModalGrupo = true;
+    }
+
+    private void AbrirModalEditarGrupo(Grupo g)
+    {
+        esEdicionGrupo = true;
+        grupoFormulario = new Grupo
+        {
+            IdGrupo = g.IdGrupo,
+            NombreGrupo = g.NombreGrupo,
+            AnioLectivo = g.AnioLectivo,
+            ciclo = g.ciclo
+        };
+        erroresGrupo.Clear();
+        mostrarModalGrupo = true;
+    }
+
+    private bool ValidarGrupo()
+    {
+        erroresGrupo.Clear();
+
+        if (string.IsNullOrWhiteSpace(grupoFormulario.NombreGrupo))
+        {
+            erroresGrupo.Add("El nombre del grupo es obligatorio.");
+        }
+        else if (grupoFormulario.NombreGrupo.Trim().Length < 3)
+        {
+            erroresGrupo.Add("El nombre del grupo debe tener al menos 3 caracteres.");
+        }
+
+        if (grupoFormulario.AnioLectivo < 2000 || grupoFormulario.AnioLectivo > 2100)
+        {
+            erroresGrupo.Add("El año lectivo debe estar en un rango válido (2000 - 2100).");
+        }
+
+        if (grupoFormulario.ciclo < 1 || grupoFormulario.ciclo > 2)
+        {
+            erroresGrupo.Add("El ciclo académico debe ser 1 o 2.");
+        }
+
+        return !erroresGrupo.Any();
     }
 
     private async Task GuardarGrupoAsync()
     {
-        if (string.IsNullOrWhiteSpace(nuevoGrupo.NombreGrupo))
-        {
-            mensajeAlerta = "El nombre del grupo no puede estar vacío.";
-            tipoAlerta = "danger";
-            return;
-        }
+        if (!ValidarGrupo()) return;
 
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            db.grupos.Add(nuevoGrupo);
-            await db.SaveChangesAsync();
 
-            mensajeAlerta = $"Grupo '{nuevoGrupo.NombreGrupo}' creado exitosamente.";
-            tipoAlerta = "success";
+            if (esEdicionGrupo)
+            {
+                var gDb = await db.grupos.FindAsync(grupoFormulario.IdGrupo);
+                if (gDb != null)
+                {
+                    gDb.NombreGrupo = grupoFormulario.NombreGrupo.Trim();
+                    gDb.AnioLectivo = grupoFormulario.AnioLectivo;
+                    gDb.ciclo = grupoFormulario.ciclo;
+
+                    await db.SaveChangesAsync();
+                    mensajeAlerta = $"Grupo '{gDb.NombreGrupo}' modificado exitosamente.";
+                    tipoAlerta = "success";
+                }
+            }
+            else
+            {
+                db.grupos.Add(new Grupo
+                {
+                    NombreGrupo = grupoFormulario.NombreGrupo.Trim(),
+                    AnioLectivo = grupoFormulario.AnioLectivo,
+                    ciclo = grupoFormulario.ciclo
+                });
+                await db.SaveChangesAsync();
+
+                mensajeAlerta = $"Grupo '{grupoFormulario.NombreGrupo}' creado exitosamente.";
+                tipoAlerta = "success";
+            }
+
             mostrarModalGrupo = false;
-            nuevoGrupo = new Grupo { AnioLectivo = DateTime.Now.Year, ciclo = 1 };
-
             await CargarGruposAsync();
         }
         catch (Exception ex)
         {
-            mensajeAlerta = $"Error al crear grupo: {ex.Message}";
+            mensajeAlerta = $"Error al procesar grupo: {ex.Message}";
             tipoAlerta = "danger";
         }
     }
 
+    private async Task EliminarGrupoAsync(int idGrupo)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var g = await db.grupos.Include(x => x.Estudiantes).FirstOrDefaultAsync(x => x.IdGrupo == idGrupo);
+            if (g != null)
+            {
+                if (g.Estudiantes.Any())
+                {
+                    mensajeAlerta = $"No se puede eliminar el grupo '{g.NombreGrupo}' porque contiene {g.Estudiantes.Count} alumnos inscritos. Elimine los alumnos primero.";
+                    tipoAlerta = "danger";
+                    return;
+                }
+
+                db.grupos.Remove(g);
+                await db.SaveChangesAsync();
+
+                mensajeAlerta = $"Grupo eliminado exitosamente.";
+                tipoAlerta = "success";
+                await CargarGruposAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al eliminar grupo: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    // OPERACIONES CRUD ESTUDIANTES
+    private void AbrirModalCrearEstudiante()
+    {
+        esEdicionEstudiante = false;
+        estudianteFormulario = new Estudiante 
+        { 
+            IdGrupo = listaGrupos.Any() ? listaGrupos.First().IdGrupo : 0 
+        };
+        erroresEstudiante.Clear();
+        mostrarModalEstudiante = true;
+    }
+
+    private void AbrirModalEditarEstudiante(Estudiante e)
+    {
+        esEdicionEstudiante = true;
+        estudianteFormulario = new Estudiante
+        {
+            IdEstudiante = e.IdEstudiante,
+            Carnet = e.Carnet,
+            NombreCompleto = e.NombreCompleto,
+            IdGrupo = e.IdGrupo
+        };
+        erroresEstudiante.Clear();
+        mostrarModalEstudiante = true;
+    }
+
+    private bool ValidarEstudiante()
+    {
+        erroresEstudiante.Clear();
+
+        if (string.IsNullOrWhiteSpace(estudianteFormulario.Carnet))
+        {
+            erroresEstudiante.Add("El carnet del estudiante es obligatorio.");
+        }
+        else if (estudianteFormulario.Carnet.Trim().Length < 4)
+        {
+            erroresEstudiante.Add("El carnet debe tener al menos 4 caracteres.");
+        }
+
+        if (string.IsNullOrWhiteSpace(estudianteFormulario.NombreCompleto))
+        {
+            erroresEstudiante.Add("El nombre completo del estudiante es obligatorio.");
+        }
+        else if (estudianteFormulario.NombreCompleto.Trim().Length < 5)
+        {
+            erroresEstudiante.Add("El nombre completo debe tener al menos 5 caracteres.");
+        }
+
+        if (estudianteFormulario.IdGrupo == 0)
+        {
+            erroresEstudiante.Add("Debe seleccionar un grupo académico válido.");
+        }
+
+        return !erroresEstudiante.Any();
+    }
+
     private async Task GuardarEstudianteAsync()
     {
-        if (string.IsNullOrWhiteSpace(nuevoEstudiante.Carnet) || string.IsNullOrWhiteSpace(nuevoEstudiante.NombreCompleto))
-        {
-            mensajeAlerta = "Debe ingresar el carnet y el nombre completo del estudiante.";
-            tipoAlerta = "danger";
-            return;
-        }
+        if (!ValidarEstudiante()) return;
 
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
+            string carnetLimpio = estudianteFormulario.Carnet.Trim().ToUpperInvariant();
+            string nombreLimpio = estudianteFormulario.NombreCompleto.Trim();
 
-            bool existe = await db.Estudiantes.AnyAsync(e => e.Carnet == nuevoEstudiante.Carnet && e.IdGrupo == nuevoEstudiante.IdGrupo);
-            if (existe)
+            if (esEdicionEstudiante)
             {
-                mensajeAlerta = $"El carnet '{nuevoEstudiante.Carnet}' ya está registrado en este grupo.";
-                tipoAlerta = "danger";
-                return;
+                // Validar que no colisione con otro estudiante del mismo grupo
+                bool existeOtro = await db.Estudiantes.AnyAsync(e => 
+                    e.Carnet == carnetLimpio && 
+                    e.IdGrupo == estudianteFormulario.IdGrupo && 
+                    e.IdEstudiante != estudianteFormulario.IdEstudiante);
+
+                if (existeOtro)
+                {
+                    erroresEstudiante.Add($"El carnet '{carnetLimpio}' ya pertenece a otro estudiante en el grupo seleccionado.");
+                    return;
+                }
+
+                var estDb = await db.Estudiantes.FindAsync(estudianteFormulario.IdEstudiante);
+                if (estDb != null)
+                {
+                    estDb.Carnet = carnetLimpio;
+                    estDb.NombreCompleto = nombreLimpio;
+                    estDb.IdGrupo = estudianteFormulario.IdGrupo;
+
+                    await db.SaveChangesAsync();
+                    mensajeAlerta = $"Estudiante '{estDb.NombreCompleto}' modificado correctamente.";
+                    tipoAlerta = "success";
+                }
+            }
+            else
+            {
+                // Validación 3FN / Restricción de unicidad
+                bool existe = await db.Estudiantes.AnyAsync(e => e.Carnet == carnetLimpio && e.IdGrupo == estudianteFormulario.IdGrupo);
+                if (existe)
+                {
+                    erroresEstudiante.Add($"El carnet '{carnetLimpio}' ya está registrado en este grupo.");
+                    return;
+                }
+
+                db.Estudiantes.Add(new Estudiante
+                {
+                    Carnet = carnetLimpio,
+                    NombreCompleto = nombreLimpio,
+                    IdGrupo = estudianteFormulario.IdGrupo
+                });
+
+                await db.SaveChangesAsync();
+                mensajeAlerta = $"Estudiante '{nombreLimpio}' registrado exitosamente.";
+                tipoAlerta = "success";
             }
 
-            db.Estudiantes.Add(nuevoEstudiante);
-            await db.SaveChangesAsync();
-
-            mensajeAlerta = $"Estudiante '{nuevoEstudiante.NombreCompleto}' agregado exitosamente.";
-            tipoAlerta = "success";
             mostrarModalEstudiante = false;
-            nuevoEstudiante = new Estudiante { IdGrupo = nuevoEstudiante.IdGrupo };
-
             await CargarEstudiantesAsync();
             await CargarGruposAsync();
         }
         catch (Exception ex)
         {
-            mensajeAlerta = $"Error al registrar estudiante: {ex.Message}";
+            mensajeAlerta = $"Error al procesar estudiante: {ex.Message}";
             tipoAlerta = "danger";
         }
     }
@@ -543,7 +890,7 @@
                 var partes = l.Split(',', StringSplitOptions.TrimEntries);
                 if (partes.Length >= 2)
                 {
-                    string carnet = partes[0];
+                    string carnet = partes[0].ToUpperInvariant();
                     string nombre = partes[1];
 
                     bool existe = await db.Estudiantes.AnyAsync(e => e.Carnet == carnet && e.IdGrupo == grupoDestinoMasivoId);
@@ -611,7 +958,7 @@
             var file = e.File;
             if (file == null) return;
 
-            using var stream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024); // Máximo 20 MB
+            using var stream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
             string msg = await GestorRespaldos.ImportarGrupoZipAsync(stream);
 
             mensajeAlerta = msg;

@@ -18,7 +18,13 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 builder.Services.AddScoped(sp => 
     sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
 
+// Registro de Servicios Lógicos de la Capa de Negocio
+builder.Services.AddSingleton<NormalizadorCodigo>();
+builder.Services.AddSingleton<DetectorIAPatrones>();
+builder.Services.AddSingleton<InspectorMetadatos>();
+builder.Services.AddSingleton<GeneradorQuizDefensa>();
 builder.Services.AddScoped<GestorRespaldos>();
+builder.Services.AddSingleton<LectorOCR>();
 
 var app = builder.Build();
 

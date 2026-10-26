@@ -1,0 +1,615 @@
+@page "/analisis"
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NormalizadorCodigo Normalizador
+@inject DetectorIAPatrones DetectorIA
+@inject InspectorMetadatos InspectorMetadatos
+@inject LectorOCR LectorOCR
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Panel de Análisis & Carga de Archivos</PageTitle>
+
+<div class="container-fluid p-0">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h2 class="fw-bold m-0"><i class="bi bi-file-earmark-code-fill text-primary me-2"></i>Panel de Análisis de Código</h2>
+            <p class="text-secondary small m-0">Comparación cruzada de similitud Levenshtein, detección de IA y metadatos de archivos</p>
+        </div>
+
+        <!-- Blind Grading Toggle -->
+        <div class="d-flex align-items-center gap-3 bg-body-tertiary px-3 py-2 rounded-pill border">
+            <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                <input class="form-check-input" type="checkbox" role="switch" id="blindGradingSwitch" @bind="modoCiegas">
+                <label class="form-check-label small fw-semibold" for="blindGradingSwitch">
+                    <i class="bi @(modoCiegas ? "bi-eye-slash-fill text-warning" : "bi-eye-fill text-secondary") me-1"></i>
+                    Modo a Ciegas (Blind Grading)
+                </label>
+            </div>
+            @if (modoCiegas)
+            {
+                <span class="badge bg-warning text-dark font-monospace small">Carnets & Nombres Ocultos</span>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(mensajeAlerta))
+    {
+        <div class="alert @(tipoAlerta == "success" ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+            <i class="bi @(tipoAlerta == "success" ? "bi-check-circle" : "bi-exclamation-triangle") me-2"></i>
+            @mensajeAlerta
+            <button type="button" class="btn-close" @onclick="() => mensajeAlerta = null"></button>
+        </div>
+    }
+
+    <!-- Configuración del Análisis -->
+    <div class="card card-modern p-3 mb-4">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold text-secondary">Evaluación / Tarea</label>
+                <select class="form-select form-select-sm" @bind="evaluacionSeleccionadaId">
+                    @foreach (var ev in listaEvaluaciones)
+                    {
+                        <option value="@ev.IdEvaluacion">@ev.NombreTarea (Cómputo @ev.Computo)</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold text-secondary">Grupo</label>
+                <select class="form-select form-select-sm" @bind="grupoSeleccionadoId" @bind:after="CargarEstudiantesGrupoAsync">
+                    @foreach (var g in listaGrupos)
+                    {
+                        <option value="@g.IdGrupo">@g.NombreGrupo</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-4 text-end">
+                <button class="btn btn-outline-primary btn-sm mt-3" @onclick="() => mostrarModalEvaluacion = true">
+                    <i class="bi bi-plus-circle me-1"></i> Nueva Evaluación
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección de Carga de Dos Archivos para Comparación Inmediata -->
+    <div class="row g-4 mb-4">
+        <!-- Archivo Estudiante A -->
+        <div class="col-lg-6">
+            <div class="card card-modern p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold m-0 text-primary">
+                        <i class="bi bi-person-badge me-2"></i>
+                        @(modoCiegas ? "Estudiante #A [Anonimizado]" : (estudianteA != null ? $"{estudianteA.NombreCompleto} ({estudianteA.Carnet})" : "Estudiante A"))
+                    </h5>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Sujeto A</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Asignar a Estudiante:</label>
+                    <select class="form-select form-select-sm" @bind="idEstudianteA" @bind:after="ActualizarEstudianteA">
+                        <option value="0">-- Seleccionar Alumno --</option>
+                        @foreach (var est in listaEstudiantes)
+                        {
+                            <option value="@est.IdEstudiante">
+                                @(modoCiegas ? $"Estudiante #{est.IdEstudiante} [Oculto]" : $"{est.Carnet} - {est.NombreCompleto}")
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Dropzone Drag & Drop A -->
+                <div class="dropzone-container mb-3 position-relative">
+                    <InputFile OnChange="@(e => CargarArchivoAAsync(e))" class="position-absolute top-0 start-0 w-100 h-100 opacity-0 cursor-pointer" accept=".cs,.txt,.png,.jpg,.jpeg" />
+                    <i class="bi bi-cloud-arrow-up fs-2 text-primary"></i>
+                    <p class="m-0 fw-semibold text-secondary small mt-1">Arrastra aquí el archivo .cs o imagen de código</p>
+                    <p class="text-secondary opacity-75 small m-0">(o haz clic para explorar)</p>
+                </div>
+
+                @if (metaA != null)
+                {
+                    <div class="p-2 rounded bg-body-secondary small mb-3 border">
+                        <div class="d-flex justify-content-between">
+                            <strong>Archivo:</strong> <span>@metaA.NombreArchivo</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <strong>Tamaño:</strong> <span>@metaA.TamanoFormateado</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <strong>Codificación:</strong> <span>@metaA.CodificacionDetectada</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <strong>Líneas:</strong> <span>@metaA.TotalLineas</span>
+                        </div>
+                    </div>
+                }
+
+                <label class="form-label small fw-semibold">Vista Previa de Código A:</label>
+                <textarea class="form-control font-monospace small bg-dark text-light" rows="8" @bind="codigoA" placeholder="El código C# aparecerá aquí..."></textarea>
+            </div>
+        </div>
+
+        <!-- Archivo Estudiante B -->
+        <div class="col-lg-6">
+            <div class="card card-modern p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold m-0 text-info">
+                        <i class="bi bi-person-badge me-2"></i>
+                        @(modoCiegas ? "Estudiante #B [Anonimizado]" : (estudianteB != null ? $"{estudianteB.NombreCompleto} ({estudianteB.Carnet})" : "Estudiante B"))
+                    </h5>
+                    <span class="badge bg-info-subtle text-info border border-info-subtle">Sujeto B (Comparativa)</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Asignar a Estudiante:</label>
+                    <select class="form-select form-select-sm" @bind="idEstudianteB" @bind:after="ActualizarEstudianteB">
+                        <option value="0">-- Seleccionar Alumno --</option>
+                        @foreach (var est in listaEstudiantes)
+                        {
+                            <option value="@est.IdEstudiante">
+                                @(modoCiegas ? $"Estudiante #{est.IdEstudiante} [Oculto]" : $"{est.Carnet} - {est.NombreCompleto}")
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Dropzone Drag & Drop B -->
+                <div class="dropzone-container mb-3 position-relative">
+                    <InputFile OnChange="@(e => CargarArchivoBAsync(e))" class="position-absolute top-0 start-0 w-100 h-100 opacity-0 cursor-pointer" accept=".cs,.txt,.png,.jpg,.jpeg" />
+                    <i class="bi bi-cloud-arrow-up fs-2 text-info"></i>
+                    <p class="m-0 fw-semibold text-secondary small mt-1">Arrastra aquí el archivo .cs o imagen de código</p>
+                    <p class="text-secondary opacity-75 small m-0">(o haz clic para explorar)</p>
+                </div>
+
+                @if (metaB != null)
+                {
+                    <div class="p-2 rounded bg-body-secondary small mb-3 border">
+                        <div class="d-flex justify-content-between">
+                            <strong>Archivo:</strong> <span>@metaB.NombreArchivo</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <strong>Tamaño:</strong> <span>@metaB.TamanoFormateado</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <strong>Codificación:</strong> <span>@metaB.CodificacionDetectada</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <strong>Líneas:</strong> <span>@metaB.TotalLineas</span>
+                        </div>
+                    </div>
+                }
+
+                <label class="form-label small fw-semibold">Vista Previa de Código B:</label>
+                <textarea class="form-control font-monospace small bg-dark text-light" rows="8" @bind="codigoB" placeholder="El código C# de comparación aparecerá aquí..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botón de Ejecución de Análisis -->
+    <div class="text-center mb-4">
+        <button class="btn btn-primary btn-lg px-5 shadow" @onclick="EjecutarAnalisisComparativoAsync" disabled="@(string.IsNullOrWhiteSpace(codigoA) || string.IsNullOrWhiteSpace(codigoB) || ejecutando)">
+            @if (ejecutando)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+                <span>Procesando Algoritmos de Levenshtein & Patrones de IA...</span>
+            }
+            else
+            {
+                <i class="bi bi-cpu me-2"></i>
+                <span>Comparar Códigos & Ejecutar Detección</span>
+            }
+        </button>
+    </div>
+
+    <!-- Visor Diferencial Lado a Lado (Diff Viewer) y Resultados Inmediatos -->
+    @if (analisisRealizado)
+    {
+        <div class="card card-modern p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <h4 class="fw-bold m-0"><i class="bi bi-columns-gap text-primary me-2"></i>Visor Diferencial Lado a Lado (Diff Viewer)</h4>
+                
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-secondary small">Similitud Levenshtein:</span>
+                        <span class="badge @(porcentajeSimilitud > 70 ? "badge-plagio" : "bg-success") fs-6">
+                            @porcentajeSimilitud%
+                        </span>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-secondary small">Riesgo IA Estudiante A:</span>
+                        <span class="badge @(resultadoIAA?.ProbabilidadIA > 50 ? "badge-ai" : "bg-secondary") fs-6">
+                            @(resultadoIAA?.ProbabilidadIA ?? 0)%
+                        </span>
+                    </div>
+
+                    <button class="btn btn-success btn-sm" @onclick="GuardarResultadosEnHistorialAsync">
+                        <i class="bi bi-floppy me-1"></i> Guardar en Historial
+                    </button>
+                </div>
+            </div>
+
+            <!-- Leyenda Diff -->
+            <div class="d-flex gap-3 mb-3 small text-secondary">
+                <div><span class="d-inline-block p-1 rounded diff-identical me-1">■</span> Línea Idéntica / Copiada</div>
+                <div><span class="d-inline-block p-1 rounded diff-similar me-1">■</span> Línea Altamente Similar</div>
+                <div><span class="d-inline-block p-1 rounded diff-unique me-1">■</span> Contenido Único</div>
+            </div>
+
+            <!-- Diff Columns -->
+            <div class="diff-container">
+                <!-- Panel Código A -->
+                <div class="diff-pane">
+                    <div class="fw-bold border-bottom pb-1 mb-2 text-primary">
+                        @(modoCiegas ? "Estudiante #A" : (estudianteA?.NombreCompleto ?? "Código A"))
+                    </div>
+                    @for (int i = 0; i < lineasDiffA.Count; i++)
+                    {
+                        var linea = lineasDiffA[i];
+                        <div class="diff-line @linea.ClaseCss">
+                            <span class="text-secondary user-select-none me-2">@(i + 1).</span>@linea.Texto
+                        </div>
+                    }
+                </div>
+
+                <!-- Panel Código B -->
+                <div class="diff-pane">
+                    <div class="fw-bold border-bottom pb-1 mb-2 text-info">
+                        @(modoCiegas ? "Estudiante #B" : (estudianteB?.NombreCompleto ?? "Código B"))
+                    </div>
+                    @for (int i = 0; i < lineasDiffB.Count; i++)
+                    {
+                        var linea = lineasDiffB[i];
+                        <div class="diff-line @linea.ClaseCss">
+                            <span class="text-secondary user-select-none me-2">@(i + 1).</span>@linea.Texto
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Modal Nueva Evaluación -->
+@if (mostrarModalEvaluacion)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);">
+        <div class="modal-dialog">
+            <div class="modal-content card-modern p-3">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Nueva Evaluación / Tarea</h5>
+                    <button type="button" class="btn-close" @onclick="() => mostrarModalEvaluacion = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Nombre de la Tarea</label>
+                        <input type="text" class="form-control" placeholder="Ej: Laboratorio 1 - Algoritmos Recursivos" @bind="nuevaEvaluacion.NombreTarea" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Cómputo</label>
+                        <select class="form-select" @bind="nuevaEvaluacion.Computo">
+                            <option value="1">Cómputo 1</option>
+                            <option value="2">Cómputo 2</option>
+                            <option value="3">Cómputo 3</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button class="btn btn-secondary" @onclick="() => mostrarModalEvaluacion = false">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="GuardarEvaluacionAsync">Guardar Evaluación</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Grupo> listaGrupos = new();
+    private List<Evaluacion> listaEvaluaciones = new();
+    private List<Estudiante> listaEstudiantes = new();
+
+    private int grupoSeleccionadoId;
+    private int evaluacionSeleccionadaId;
+
+    private int idEstudianteA;
+    private int idEstudianteB;
+    private Estudiante? estudianteA;
+    private Estudiante? estudianteB;
+
+    private string codigoA = string.Empty;
+    private string codigoB = string.Empty;
+
+    private InformacionMetadatos? metaA;
+    private InformacionMetadatos? metaB;
+
+    private bool modoCiegas = false;
+    private bool ejecutando = false;
+    private bool analisisRealizado = false;
+
+    private double porcentajeSimilitud = 0;
+    private DetectorIAPatrones.ResultadoDeteccionIA? resultadoIAA;
+    private DetectorIAPatrones.ResultadoDeteccionIA? resultadoIAB;
+
+    private List<LineaDiff> lineasDiffA = new();
+    private List<LineaDiff> lineasDiffB = new();
+
+    private string? mensajeAlerta;
+    private string tipoAlerta = "success";
+
+    private bool mostrarModalEvaluacion = false;
+    private Evaluacion nuevaEvaluacion = new() { Computo = 1 };
+
+    private class LineaDiff
+    {
+        public string Texto { get; set; } = string.Empty;
+        public string ClaseCss { get; set; } = "diff-unique";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        listaGrupos = await db.grupos.OrderBy(g => g.NombreGrupo).ToListAsync();
+        listaEvaluaciones = await db.Evaluacion.OrderByDescending(e => e.IdEvaluacion).ToListAsync();
+
+        if (listaGrupos.Any())
+        {
+            grupoSeleccionadoId = listaGrupos.First().IdGrupo;
+            await CargarEstudiantesGrupoAsync();
+        }
+
+        if (listaEvaluaciones.Any())
+        {
+            evaluacionSeleccionadaId = listaEvaluaciones.First().IdEvaluacion;
+        }
+    }
+
+    private async Task CargarEstudiantesGrupoAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        listaEstudiantes = await db.Estudiantes
+            .Where(e => e.IdGrupo == grupoSeleccionadoId)
+            .OrderBy(e => e.NombreCompleto)
+            .ToListAsync();
+    }
+
+    private void ActualizarEstudianteA()
+    {
+        estudianteA = listaEstudiantes.FirstOrDefault(e => e.IdEstudiante == idEstudianteA);
+    }
+
+    private void ActualizarEstudianteB()
+    {
+        estudianteB = listaEstudiantes.FirstOrDefault(e => e.IdEstudiante == idEstudianteB);
+    }
+
+    private async Task CargarArchivoAAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        try
+        {
+            // Sanitización del nombre para evitar Path Traversal
+            string nombreSeguro = Path.GetFileName(file.Name);
+
+            if (LectorOCR.EsArchivoImagen(nombreSeguro))
+            {
+                using var stream = file.OpenReadStream(10 * 1024 * 1024);
+                var ocr = await LectorOCR.ExtraerTextoDeImagenAsync(stream, nombreSeguro);
+                codigoA = ocr.TextoExtraido;
+                metaA = new InformacionMetadatos
+                {
+                    NombreArchivo = nombreSeguro,
+                    TamanoBytes = file.Size,
+                    TamanoFormateado = $"{file.Size / 1024.0:F1} KB",
+                    CodificacionDetectada = "OCR / Bitmap",
+                    TotalLineas = codigoA.Split('\n').Length
+                };
+            }
+            else
+            {
+                using var stream = file.OpenReadStream(5 * 1024 * 1024);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                byte[] bytes = ms.ToArray();
+
+                codigoA = System.Text.Encoding.UTF8.GetString(bytes);
+                metaA = InspectorMetadatos.InspeccionarBytes(nombreSeguro, bytes, file.LastModified.UtcDateTime);
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al cargar archivo A: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task CargarArchivoBAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        try
+        {
+            string nombreSeguro = Path.GetFileName(file.Name);
+
+            if (LectorOCR.EsArchivoImagen(nombreSeguro))
+            {
+                using var stream = file.OpenReadStream(10 * 1024 * 1024);
+                var ocr = await LectorOCR.ExtraerTextoDeImagenAsync(stream, nombreSeguro);
+                codigoB = ocr.TextoExtraido;
+                metaB = new InformacionMetadatos
+                {
+                    NombreArchivo = nombreSeguro,
+                    TamanoBytes = file.Size,
+                    TamanoFormateado = $"{file.Size / 1024.0:F1} KB",
+                    CodificacionDetectada = "OCR / Bitmap",
+                    TotalLineas = codigoB.Split('\n').Length
+                };
+            }
+            else
+            {
+                using var stream = file.OpenReadStream(5 * 1024 * 1024);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                byte[] bytes = ms.ToArray();
+
+                codigoB = System.Text.Encoding.UTF8.GetString(bytes);
+                metaB = InspectorMetadatos.InspeccionarBytes(nombreSeguro, bytes, file.LastModified.UtcDateTime);
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al cargar archivo B: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task EjecutarAnalisisComparativoAsync()
+    {
+        ejecutando = true;
+        analisisRealizado = false;
+        mensajeAlerta = null;
+
+        try
+        {
+            // Ejecución asíncrona no bloqueante
+            await Task.Run(() =>
+            {
+                porcentajeSimilitud = Normalizador.CalcularPorcentajeSimilitud(codigoA, codigoB);
+                resultadoIAA = DetectorIA.Analizar(codigoA);
+                resultadoIAB = DetectorIA.Analizar(codigoB);
+
+                GenerarDiffLadoALado();
+            });
+
+            analisisRealizado = true;
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error durante el análisis comparativo: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+        finally
+        {
+            ejecutando = false;
+        }
+    }
+
+    private void GenerarDiffLadoALado()
+    {
+        var lineasA = codigoA.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var lineasB = codigoB.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+        lineasDiffA = new List<LineaDiff>();
+        lineasDiffB = new List<LineaDiff>();
+
+        var setNormalizadoB = new HashSet<string>(lineasB.Select(b => Normalizador.Normalizar(b)).Where(s => !string.IsNullOrWhiteSpace(s)));
+        var setNormalizadoA = new HashSet<string>(lineasA.Select(a => Normalizador.Normalizar(a)).Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        foreach (var lA in lineasA)
+        {
+            string normA = Normalizador.Normalizar(lA);
+            string clase = "diff-unique";
+
+            if (!string.IsNullOrWhiteSpace(normA))
+            {
+                if (setNormalizadoB.Contains(normA))
+                {
+                    clase = "diff-identical";
+                }
+                else if (setNormalizadoB.Any(b => Normalizador.CalcularPorcentajeSimilitud(normA, b) > 75.0))
+                {
+                    clase = "diff-similar";
+                }
+            }
+
+            lineasDiffA.Add(new LineaDiff { Texto = lA, ClaseCss = clase });
+        }
+
+        foreach (var lB in lineasB)
+        {
+            string normB = Normalizador.Normalizar(lB);
+            string clase = "diff-unique";
+
+            if (!string.IsNullOrWhiteSpace(normB))
+            {
+                if (setNormalizadoA.Contains(normB))
+                {
+                    clase = "diff-identical";
+                }
+                else if (setNormalizadoA.Any(a => Normalizador.CalcularPorcentajeSimilitud(normB, a) > 75.0))
+                {
+                    clase = "diff-similar";
+                }
+            }
+
+            lineasDiffB.Add(new LineaDiff { Texto = lB, ClaseCss = clase });
+        }
+    }
+
+    private async Task GuardarResultadosEnHistorialAsync()
+    {
+        if (idEstudianteA == 0)
+        {
+            mensajeAlerta = "Debe asignar el código al Estudiante A para registrar su resultado en la base de datos.";
+            tipoAlerta = "danger";
+            return;
+        }
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            string metadatosJson = System.Text.Json.JsonSerializer.Serialize(metaA ?? new InformacionMetadatos());
+
+            var historial = new HistorialAnalisis
+            {
+                IdEstudiante = idEstudianteA,
+                IdEvaluacion = evaluacionSeleccionadaId,
+                PorcentajePlagio = (float)porcentajeSimilitud,
+                PorcentajeIA = resultadoIAA?.ProbabilidadIA ?? 0,
+                RutaArchivo = metaA?.NombreArchivo ?? "codigo_estudiante_a.cs",
+                MetadatosJson = metadatosJson
+            };
+
+            db.Evaluaciones.Add(historial);
+            await db.SaveChangesAsync();
+
+            mensajeAlerta = "Resultado de análisis registrado con éxito en el historial del estudiante.";
+            tipoAlerta = "success";
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al guardar resultado: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task GuardarEvaluacionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(nuevaEvaluacion.NombreTarea)) return;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.Evaluacion.Add(nuevaEvaluacion);
+            await db.SaveChangesAsync();
+
+            listaEvaluaciones = await db.Evaluacion.OrderByDescending(e => e.IdEvaluacion).ToListAsync();
+            evaluacionSeleccionadaId = nuevaEvaluacion.IdEvaluacion;
+            mostrarModalEvaluacion = false;
+            nuevaEvaluacion = new Evaluacion { Computo = 1 };
+
+            mensajeAlerta = "Evaluación creada correctamente.";
+            tipoAlerta = "success";
+        }
+        catch (Exception ex)
+        {
+            mensajeAlerta = $"Error al crear evaluación: {ex.Message}";
+            tipoAlerta = "danger";
+        }
+    }
+}
