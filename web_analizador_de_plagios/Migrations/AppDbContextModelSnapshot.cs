@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using web_analizador_de_plagios.Data.Models;
 
@@ -15,31 +16,34 @@ namespace web_analizador_de_plagios.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.Entity("web_analizador_de_plagios.Data.Models.Estudiante", b =>
                 {
                     b.Property<int>("IdEstudiante")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdEstudiante"));
 
                     b.Property<string>("Carnet")
                         .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("GrupoIdGrupo")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("IdGrupo")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("NombreCompleto")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("IdEstudiante");
 
-                    b.HasIndex("GrupoIdGrupo");
+                    b.HasIndex("IdGrupo");
 
                     b.HasIndex("Carnet", "IdGrupo")
                         .IsUnique();
@@ -51,17 +55,19 @@ namespace web_analizador_de_plagios.Migrations
                 {
                     b.Property<int>("IdEvaluacion")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdEvaluacion"));
 
                     b.Property<int>("Computo")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("FechaEvaluacion")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("NombreTarea")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("IdEvaluacion");
 
@@ -72,17 +78,19 @@ namespace web_analizador_de_plagios.Migrations
                 {
                     b.Property<int>("IdGrupo")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdGrupo"));
 
                     b.Property<int>("AnioLectivo")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("NombreGrupo")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("ciclo")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("IdGrupo");
 
@@ -93,39 +101,35 @@ namespace web_analizador_de_plagios.Migrations
                 {
                     b.Property<int>("IdHistorial")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
-                    b.Property<int?>("EstudianteIdEstudiante")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("EvaluacionIdEvaluacion")
-                        .HasColumnType("INTEGER");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdHistorial"));
 
                     b.Property<int>("IdEstudiante")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("IdEvaluacion")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("MetadatosJson")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<float>("PorcentajeIA")
-                        .HasColumnType("REAL");
+                        .HasColumnType("real");
 
                     b.Property<float>("PorcentajePlagio")
-                        .HasColumnType("REAL");
+                        .HasColumnType("real");
 
                     b.Property<string>("RutaArchivo")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("IdHistorial");
 
-                    b.HasIndex("EstudianteIdEstudiante");
+                    b.HasIndex("IdEstudiante");
 
-                    b.HasIndex("EvaluacionIdEvaluacion");
+                    b.HasIndex("IdEvaluacion");
 
                     b.ToTable("Evaluaciones");
                 });
@@ -134,7 +138,9 @@ namespace web_analizador_de_plagios.Migrations
                 {
                     b.HasOne("web_analizador_de_plagios.Data.Models.Grupo", "Grupo")
                         .WithMany("Estudiantes")
-                        .HasForeignKey("GrupoIdGrupo");
+                        .HasForeignKey("IdGrupo")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Grupo");
                 });
@@ -143,11 +149,15 @@ namespace web_analizador_de_plagios.Migrations
                 {
                     b.HasOne("web_analizador_de_plagios.Data.Models.Estudiante", "Estudiante")
                         .WithMany("Historiales")
-                        .HasForeignKey("EstudianteIdEstudiante");
+                        .HasForeignKey("IdEstudiante")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("web_analizador_de_plagios.Data.Models.Evaluacion", "Evaluacion")
-                        .WithMany()
-                        .HasForeignKey("EvaluacionIdEvaluacion");
+                        .WithMany("Historiales")
+                        .HasForeignKey("IdEvaluacion")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Estudiante");
 
@@ -155,6 +165,11 @@ namespace web_analizador_de_plagios.Migrations
                 });
 
             modelBuilder.Entity("web_analizador_de_plagios.Data.Models.Estudiante", b =>
+                {
+                    b.Navigation("Historiales");
+                });
+
+            modelBuilder.Entity("web_analizador_de_plagios.Data.Models.Evaluacion", b =>
                 {
                     b.Navigation("Historiales");
                 });

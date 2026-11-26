@@ -1,4 +1,4 @@
-﻿namespace web_analizador_de_plagios.Data.Models
+namespace web_analizador_de_plagios.Data.Models
 {
     public class Evaluacion
     {
@@ -6,5 +6,7 @@
         public string NombreTarea { get; set; } = string.Empty;
         public int Computo { get; set; }
         public DateTime FechaEvaluacion { get; set; } = DateTime.Now;
+
+        public ICollection<HistorialAnalisis> Historiales { get; set; } = new List<HistorialAnalisis>();
     }
 }
