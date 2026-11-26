@@ -22,6 +22,69 @@ namespace web_analizador_de_plagios.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("web_analizador_de_plagios.Data.Models.Asignatura", b =>
+                {
+                    b.Property<int>("IdAsignatura")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdAsignatura"));
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("UnidadesValorativas")
+                        .HasColumnType("int");
+
+                    b.HasKey("IdAsignatura");
+
+                    b.HasIndex("Codigo")
+                        .IsUnique();
+
+                    b.ToTable("Asignaturas");
+                });
+
+            modelBuilder.Entity("web_analizador_de_plagios.Data.Models.Docente", b =>
+                {
+                    b.Property<int>("IdDocente")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdDocente"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Correo")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Especialidad")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("NombreCompleto")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("IdDocente");
+
+                    b.HasIndex("Correo")
+                        .IsUnique();
+
+                    b.ToTable("Docentes");
+                });
+
             modelBuilder.Entity("web_analizador_de_plagios.Data.Models.Estudiante", b =>
                 {
                     b.Property<int>("IdEstudiante")

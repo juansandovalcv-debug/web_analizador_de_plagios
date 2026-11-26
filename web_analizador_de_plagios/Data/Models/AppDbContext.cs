@@ -9,6 +9,8 @@ namespace web_analizador_de_plagios.Data.Models
         public DbSet<Estudiante> Estudiantes => Set<Estudiante>();
         public DbSet<Evaluacion> Evaluacion => Set<Evaluacion>();
         public DbSet<HistorialAnalisis> Evaluaciones => Set<HistorialAnalisis>();
+        public DbSet<Docente> Docentes => Set<Docente>();
+        public DbSet<Asignatura> Asignaturas => Set<Asignatura>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -19,6 +21,8 @@ namespace web_analizador_de_plagios.Data.Models
             modelBuilder.Entity<Estudiante>().HasKey(e => e.IdEstudiante);
             modelBuilder.Entity<Evaluacion>().HasKey(e => e.IdEvaluacion);
             modelBuilder.Entity<HistorialAnalisis>().HasKey(h => h.IdHistorial);
+            modelBuilder.Entity<Docente>().HasKey(d => d.IdDocente);
+            modelBuilder.Entity<Asignatura>().HasKey(a => a.IdAsignatura);
 
             // Relaciones explícitas (FKs sobre IdGrupo, IdEstudiante e IdEvaluacion)
             modelBuilder.Entity<Estudiante>()
@@ -39,9 +43,17 @@ namespace web_analizador_de_plagios.Data.Models
                 .HasForeignKey(h => h.IdEvaluacion)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Índice único para evitar duplicar carnet por grupo
+            // Índices únicos
             modelBuilder.Entity<Estudiante>()
                 .HasIndex(e => new { e.Carnet, e.IdGrupo })
+                .IsUnique();
+
+            modelBuilder.Entity<Docente>()
+                .HasIndex(d => d.Correo)
+                .IsUnique();
+
+            modelBuilder.Entity<Asignatura>()
+                .HasIndex(a => a.Codigo)
                 .IsUnique();
         }
     }
